@@ -1,0 +1,16 @@
+# Local development and secrets
+node_modules/
+.env
+.env.*
+*.key
+*.pem
+
+# Packaged artifacts
+*.zip
+*.crx
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
