@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create or update (for example, v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - name: Package load-unpacked extension
+        run: |
+          mkdir -p dist
+          git archive --format=zip --prefix=frameweave/ --output="dist/frameweave-${RELEASE_TAG}.zip" "$GITHUB_SHA"
+          sha256sum "dist/frameweave-${RELEASE_TAG}.zip" > dist/SHA256SUMS.txt
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          make_latest: true
+          body: |
+            ## Install
+
+            Download `frameweave-${{ env.RELEASE_TAG }}.zip`, extract it, then use **Load unpacked** from `chrome://extensions` and select the extracted `frameweave` folder.
+
+            Verify the ZIP against `SHA256SUMS.txt` before loading it.
+          files: |
+            dist/frameweave-${{ env.RELEASE_TAG }}.zip
+            dist/SHA256SUMS.txt

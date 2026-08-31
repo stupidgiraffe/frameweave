@@ -390,6 +390,28 @@ summary {
   padding: 3px 0;
 }
 
+.support-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 2px;
+  color: #93a2c3;
+  font-size: 11px;
+}
+
+.support-footer a {
+  color: #aebdf5;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.support-footer a:hover,
+.support-footer a:focus-visible {
+  color: #d7e0ff;
+  text-decoration: underline;
+}
+
 .preview-actions {
   justify-content: space-between;
   gap: 9px;

@@ -7,7 +7,7 @@ Frameweave is a local-first, bring-your-own-key browser workspace for two jobs t
 
 No hosted service is required for the open-source base. Provider keys, scripts, values, assets, backups, and layout telemetry remain in the browser's local extension storage unless the user explicitly selects the optional backend adapter.
 
-> Status: v1.0.0 MV3 release candidate. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
+> Status: v1.0.0 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
 
 ## Design boundary
 
@@ -133,6 +133,10 @@ npm run check
 ```
 
 Before release, run the [browser acceptance checklist](docs/compatibility.md#browser-acceptance-checklist) in a clean Chrome profile, with at least one API key from each advertised provider and representative userscripts using `@require`, `@resource`, updates, GM values, menus, tabs, download, notification, and XHR.
+
+## Support Frameweave
+
+If Frameweave is useful to you, you can support its development at [Buy Me a Coffee](https://www.buymeacoffee.com/stupidgiraffe). GitHub also exposes this link through the repository's **Sponsor** button.
 
 ## Future hosted tier
 

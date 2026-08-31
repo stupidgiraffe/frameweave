@@ -364,6 +364,12 @@ summary {
   color: #e7edfc;
 }
 
+.support-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .quiet-button {
   background: transparent;
   color: #aec0f6;
