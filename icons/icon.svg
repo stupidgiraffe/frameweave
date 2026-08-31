@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title>Frameweave</title>
+  <defs>
+    <linearGradient id="surface" x1="14" y1="12" x2="114" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7185ff"/>
+      <stop offset="1" stop-color="#38d0ac"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="32" fill="#091226"/>
+  <rect x="10" y="10" width="108" height="108" rx="25" fill="none" stroke="url(#surface)" stroke-width="8"/>
+  <path d="M31 35h19v58H37V67h16V53H31z" fill="#edf5ff"/>
+  <path d="M59 35h12l8 31 8-20h11l8 20 8-31h12l-15 58H99L92.5 73 85 93H74z" fill="url(#surface)"/>
+</svg>

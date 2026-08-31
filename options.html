@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Frameweave Script Library</title>
+    <link rel="stylesheet" href="src/options.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">FW</div>
+          <div>
+            <h1>Frameweave Script Library</h1>
+            <p>Local userscripts, native runtime access, dependency caching, and optional BYOK drafting.</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button id="sync-scripts" class="secondary-button" type="button">Sync scripts</button>
+          <button id="open-popup" class="quiet-button" type="button">Layout assistant</button>
+        </div>
+      </header>
+
+      <section id="runtime-card" class="runtime-card" aria-live="polite">
+        <strong id="runtime-title">Checking User Scripts support…</strong>
+        <span id="runtime-detail">Frameweave stores scripts locally and registers enabled scripts with Chrome.</span>
+      </section>
+
+      <div class="workspace">
+        <aside class="library-panel" aria-label="Userscript library">
+          <div class="panel-heading">
+            <div>
+              <h2>Scripts</h2>
+              <p id="script-count">0 saved</p>
+            </div>
+            <button id="new-script" class="primary-button compact-button" type="button">New script</button>
+          </div>
+          <input id="script-filter" class="filter-input" type="search" placeholder="Filter scripts" autocomplete="off">
+          <div id="script-list" class="script-list" role="list"></div>
+          <div class="library-actions">
+            <button id="import-script" class="secondary-button" type="button">Import</button>
+            <button id="export-scripts" class="secondary-button" type="button">Export backup</button>
+            <button id="update-all-scripts" class="secondary-button" type="button">Update all</button>
+          </div>
+          <div class="remote-install">
+            <label for="install-url">Install from script URL
+              <input id="install-url" type="url" inputmode="url" placeholder="https://example.com/script.user.js" autocomplete="url">
+            </label>
+            <button id="install-url-button" class="secondary-button" type="button">Load URL</button>
+          </div>
+          <input id="import-file" type="file" accept=".js,.user.js,.json,application/javascript,application/json,text/javascript" hidden>
+        </aside>
+
+        <section class="editor-panel" aria-labelledby="editor-title">
+          <form id="script-form" novalidate>
+            <div class="editor-heading">
+              <div>
+                <h2 id="editor-title">New userscript</h2>
+                <p id="editor-subtitle">Create a local script, then save and sync its native registration.</p>
+              </div>
+              <label class="switch-row" for="script-enabled">
+                <input id="script-enabled" type="checkbox" checked>
+                <span>Enabled</span>
+              </label>
+            </div>
+
+            <div class="metadata-grid">
+              <label for="script-name">Name
+                <input id="script-name" type="text" maxlength="160" required placeholder="Example: Compact video controls">
+              </label>
+              <label for="script-version">Version
+                <input id="script-version" type="text" maxlength="96" value="1.0.0">
+              </label>
+              <label class="wide" for="script-description">Description
+                <input id="script-description" type="text" maxlength="1200" placeholder="What this script changes">
+              </label>
+              <label for="script-run-at">Run at
+                <select id="script-run-at">
+                  <option value="document_start">Document start</option>
+                  <option value="document_end">Document end</option>
+                  <option value="document_idle" selected>Document idle</option>
+                </select>
+              </label>
+              <label for="script-world">Execution world
+                <select id="script-world">
+                  <option value="USER_SCRIPT" selected>User Script — GM bridge available</option>
+                  <option value="MAIN">Main page — page globals, limited GM bridge</option>
+                </select>
+              </label>
+              <label class="wide" for="script-matches">Match patterns <span>one per line</span>
+                <textarea id="script-matches" rows="3" spellcheck="false">*://*/*</textarea>
+              </label>
+              <label class="wide" for="script-exclude-matches">Exclude match patterns <span>optional, one per line</span>
+                <textarea id="script-exclude-matches" rows="2" spellcheck="false"></textarea>
+              </label>
+            </div>
+
+            <details class="advanced-editor">
+              <summary>Compatibility metadata</summary>
+              <div class="metadata-grid advanced-grid">
+                <label for="script-include-globs">Include globs <span>one per line</span>
+                  <textarea id="script-include-globs" rows="2" spellcheck="false" placeholder="https://example.com/*"></textarea>
+                </label>
+                <label for="script-exclude-globs">Exclude globs <span>one per line</span>
+                  <textarea id="script-exclude-globs" rows="2" spellcheck="false"></textarea>
+                </label>
+                <label for="script-grants">Portable @grant metadata <span>informational, one per line</span>
+                  <textarea id="script-grants" rows="2" spellcheck="false" placeholder="GM_getValue&#10;GM_setValue"></textarea>
+                </label>
+                <label for="script-connects">Portable @connect metadata <span>informational; one per line</span>
+                  <textarea id="script-connects" rows="2" spellcheck="false" placeholder="api.example.com"></textarea>
+                </label>
+                <label for="script-requires">@require URLs <span>one per line; cached locally before registration</span>
+                  <textarea id="script-requires" rows="3" spellcheck="false" placeholder="https://cdn.example.com/helper.js"></textarea>
+                </label>
+                <label for="script-resources">@resource declarations <span>one per line: name URL</span>
+                  <textarea id="script-resources" rows="3" spellcheck="false" placeholder="logo https://example.com/logo.svg"></textarea>
+                </label>
+                <label for="script-update-url">@updateURL <span>optional remote update source</span>
+                  <input id="script-update-url" type="url" inputmode="url" placeholder="https://example.com/script.user.js">
+                </label>
+                <label for="script-download-url">@downloadURL <span>fallback update source</span>
+                  <input id="script-download-url" type="url" inputmode="url" placeholder="https://example.com/script.user.js">
+                </label>
+                <label class="wide" for="script-source-url">Installed source URL <span>provenance only; set automatically when loading a URL</span>
+                  <input id="script-source-url" type="url" inputmode="url" placeholder="https://example.com/script.user.js">
+                </label>
+              </div>
+            </details>
+
+            <label class="checkbox-row" for="script-auto-update">
+              <input id="script-auto-update" type="checkbox" checked>
+              Check and apply remote updates every 24 hours when an update URL is present
+            </label>
+
+            <label class="checkbox-row" for="script-all-frames">
+              <input id="script-all-frames" type="checkbox">
+              Run in matching child frames
+            </label>
+
+            <label class="code-label" for="script-code">Script body
+              <span>Metadata headers are generated on export. Review code before saving or running.</span>
+            </label>
+            <textarea id="script-code" class="code-editor" rows="20" spellcheck="false" wrap="off" placeholder="document.documentElement.classList.add('my-script-active');"></textarea>
+
+            <div class="editor-actions">
+              <button id="save-script" class="primary-button" type="submit">Save and sync</button>
+              <button id="run-now" class="secondary-button" type="button">Run in active tab</button>
+              <button id="export-script" class="secondary-button" type="button">Export .user.js</button>
+              <button id="refresh-assets" class="secondary-button" type="button">Refresh dependencies</button>
+              <button id="check-update" class="secondary-button" type="button">Check update</button>
+              <button id="move-script-up" class="quiet-button" type="button">Move up</button>
+              <button id="move-script-down" class="quiet-button" type="button">Move down</button>
+              <button id="delete-script" class="danger-button" type="button">Delete</button>
+            </div>
+          </form>
+
+          <section class="ai-panel" aria-labelledby="ai-title">
+            <div class="ai-heading">
+              <div>
+                <h2 id="ai-title">BYOK script draft</h2>
+                <p>Uses your configured provider and the active page’s slim structural map when available. The response fills the editor only; it never runs automatically.</p>
+              </div>
+            </div>
+            <div class="ai-grid">
+              <label for="ai-page-url">Target page URL <span>optional but recommended</span>
+                <input id="ai-page-url" type="url" inputmode="url" placeholder="https://example.com/page">
+              </label>
+              <label for="ai-prompt">What should the userscript do?
+                <textarea id="ai-prompt" rows="4" maxlength="3000" placeholder="Example: On this site, make long article text easier to read and add a keyboard shortcut to toggle the changes."></textarea>
+              </label>
+            </div>
+            <button id="generate-script" class="secondary-button" type="button">Generate draft into editor</button>
+          </section>
+        </section>
+      </div>
+
+      <output id="status" class="status status-idle" aria-live="polite">
+        Ready.
+      </output>
+    </main>
+    <script type="module" src="src/options.js"></script>
+  </body>
+</html>

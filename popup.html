@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Frameweave</title>
+    <link rel="stylesheet" href="src/popup.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div class="logo-mark" aria-hidden="true">FW</div>
+        <div>
+          <h1>Frameweave</h1>
+          <p>Local-first AI page workspace</p>
+        </div>
+      </header>
+
+      <p class="privacy-note">
+        Your credential stays in this browser and is sent only to the route you select.
+      </p>
+
+      <section class="userscript-summary" aria-labelledby="userscript-title">
+        <div>
+          <h2 id="userscript-title">Userscripts</h2>
+          <p id="userscript-state">Checking native userscript support…</p>
+        </div>
+        <button id="manage-scripts" class="secondary-button compact-button" type="button">Manage</button>
+      </section>
+
+      <form id="settings-form" novalidate>
+        <fieldset>
+          <legend>Execution route</legend>
+          <div class="segmented-control" role="radiogroup" aria-label="Execution route">
+            <label>
+              <input type="radio" name="routeMode" value="byok" checked>
+              <span>Direct BYOK</span>
+            </label>
+            <label>
+              <input type="radio" name="routeMode" value="backend">
+              <span>Backend adapter</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <section id="byok-settings" class="settings-section" aria-label="Direct provider settings">
+          <label for="provider">Provider</label>
+          <select id="provider" name="provider">
+            <option value="openai">OpenAI-compatible Responses API</option>
+            <option value="anthropic">Anthropic Messages API</option>
+            <option value="deepseek">DeepSeek Chat API</option>
+          </select>
+
+          <label for="model">Model</label>
+          <input id="model" name="model" type="text" maxlength="128" autocomplete="off" spellcheck="false">
+
+          <label for="api-key">Provider API key</label>
+          <div class="secret-row">
+            <input id="api-key" name="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a key to save or replace it">
+            <button id="clear-provider-key" class="quiet-button" type="button">Clear</button>
+          </div>
+          <p id="provider-key-state" class="field-hint"></p>
+        </section>
+
+        <section id="backend-settings" class="settings-section is-hidden" aria-label="Backend adapter settings">
+          <label for="backend-endpoint">HTTPS backend endpoint</label>
+          <input id="backend-endpoint" name="backendEndpoint" type="url" inputmode="url" autocomplete="url" placeholder="https://api.example.com/layout">
+          <p class="field-hint">Backend traffic is sent only to this configured HTTPS endpoint when backend mode is selected.</p>
+
+          <label for="backend-token">Backend bearer token</label>
+          <div class="secret-row">
+            <input id="backend-token" name="backendToken" type="password" autocomplete="off" spellcheck="false" placeholder="Optional; paste to save or replace">
+            <button id="clear-backend-token" class="quiet-button" type="button">Clear</button>
+          </div>
+          <p id="backend-token-state" class="field-hint"></p>
+        </section>
+
+        <details class="advanced-settings">
+          <summary>Extraction limits</summary>
+          <div class="number-grid">
+            <label for="max-nodes">Maximum layout nodes
+              <input id="max-nodes" name="maxNodes" type="number" min="40" max="500" step="10">
+            </label>
+            <label for="max-depth">Maximum depth
+              <input id="max-depth" name="maxDepth" type="number" min="3" max="16" step="1">
+            </label>
+          </div>
+          <label class="checkbox-row" for="all-frames">
+            <input id="all-frames" name="allFrames" type="checkbox">
+            Also style same-origin subframes
+          </label>
+        </details>
+
+        <div class="form-actions">
+          <button id="save-settings" class="secondary-button" type="submit">Save settings</button>
+        </div>
+      </form>
+
+      <section class="prompt-section" aria-labelledby="prompt-label">
+        <label id="prompt-label" for="layout-prompt">Describe the layout change</label>
+        <textarea id="layout-prompt" rows="5" maxlength="3000" placeholder="Example: Make the main reading column calmer and easier to scan, while keeping navigation visible."></textarea>
+
+        <section class="target-section" aria-labelledby="target-label">
+          <div class="target-heading">
+            <div>
+              <h2 id="target-label">Specific target <span>(optional)</span></h2>
+              <p>Choose an element when the request should focus on one part of the page.</p>
+            </div>
+            <button id="pick-element" class="secondary-button compact-button" type="button">Pick element</button>
+          </div>
+          <output id="selected-target" class="selected-target" aria-live="polite">
+            No specific target selected. The model will use the page structure.
+          </output>
+          <button id="clear-picked-element" class="text-button" type="button" disabled>Clear target</button>
+        </section>
+
+        <div class="run-actions">
+          <button id="inspect-page" class="secondary-button" type="button">Inspect page</button>
+          <button id="preview-layout" class="secondary-button" type="button">Preview CSS</button>
+          <button id="apply-layout" class="primary-button" type="button">Generate and apply</button>
+        </div>
+        <div id="preview-actions" class="preview-actions is-hidden" aria-live="polite">
+          <span>Preview active — automation has not run.</span>
+          <div>
+            <button id="discard-preview" class="quiet-button" type="button">Discard</button>
+            <button id="commit-preview" class="primary-button compact-button" type="button">Keep preview</button>
+          </div>
+        </div>
+        <button id="save-layout-as-script" class="text-button" type="button" disabled>Save current CSS as userscript</button>
+        <button id="remove-css" class="text-button" type="button">Remove the last Frameweave CSS</button>
+      </section>
+
+      <section class="impact-section" aria-labelledby="impact-label">
+        <h2 id="impact-label">Local activity</h2>
+        <output id="impact-summary" class="impact-summary" aria-live="polite">
+          0 applied page(s) · 0 preview(s) · 0 CSS injection(s) · 0 automation action(s)
+        </output>
+      </section>
+
+      <output id="status" class="status status-idle" aria-live="polite">
+        Ready. Open a normal web page, then describe the change you want.
+      </output>
+    </main>
+    <script type="module" src="src/popup.js"></script>
+  </body>
+</html>
