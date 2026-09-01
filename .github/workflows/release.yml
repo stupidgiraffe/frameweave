@@ -36,7 +36,7 @@ jobs:
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             tag="${{ github.ref_name }}"
           else
-            tag="v$(node -p 'require(\"./package.json\").version')"
+            tag="v$(node -p "require('./package.json').version")"
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - run: npm ci --ignore-scripts
