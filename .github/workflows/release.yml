@@ -2,6 +2,7 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags:
       - "v*"
   workflow_dispatch:
@@ -16,9 +17,8 @@ permissions:
 
 jobs:
   publish:
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release:')
     runs-on: ubuntu-latest
-    env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,9 +27,23 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            tag="${{ github.ref_name }}"
+          else
+            tag="v$(node -p 'require(\"./package.json\").version')"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - run: npm ci --ignore-scripts
       - run: npm run check
       - name: Package load-unpacked extension
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           mkdir -p dist
           git archive --format=zip --prefix=frameweave/ --output="dist/frameweave-${RELEASE_TAG}.zip" "$GITHUB_SHA"
@@ -37,16 +51,16 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
+          tag_name: ${{ steps.release.outputs.tag }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
           make_latest: true
           body: |
             ## Install
 
-            Download `frameweave-${{ env.RELEASE_TAG }}.zip`, extract it, then use **Load unpacked** from `chrome://extensions` and select the extracted `frameweave` folder.
+            Download `frameweave-${{ steps.release.outputs.tag }}.zip`, extract it, then use **Load unpacked** from `chrome://extensions` and select the extracted `frameweave` folder.
 
             Verify the ZIP against `SHA256SUMS.txt` before loading it.
           files: |
-            dist/frameweave-${{ env.RELEASE_TAG }}.zip
+            dist/frameweave-${{ steps.release.outputs.tag }}.zip
             dist/SHA256SUMS.txt
