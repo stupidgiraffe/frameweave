@@ -9,11 +9,19 @@ No hosted service is required for the open-source base. Provider keys, scripts, 
 
 > Status: v1.0.0 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
 
-## Design boundary
+## Why Frameweave
 
-Frameweave is a **Manifest V3** extension core, not a "v3 product" label. Its userscript runtime requires Chrome 135+ because manual execution uses `chrome.userScripts.execute()`. Chrome 138+ exposes an **Allow User Scripts** toggle in each extension's Details page; older Chrome versions require Developer mode for the User Scripts API. See the [Chrome User Scripts API](https://developer.chrome.com/docs/extensions/reference/api/userScripts).
+Frameweave combines an AI-powered page-customization workspace with a serious, native userscript manager. It is built for people who want to reshape the web instead of merely browse it: describe a change, inspect the result, keep what works, and build a reusable library of scripts that travel with you.
 
-The extension never evaluates a fetched string with `eval` or `new Function`. User-provided script bodies, `@require` dependencies, and fetched script updates are passed only to `chrome.userScripts`, the documented MV3 API intended for arbitrary user-provided code. Extension-owned logic remains packaged and reviewable, which is the important MV3/Web Store boundary. See [Chrome's MV3 policy](https://developer.chrome.com/docs/webstore/program-policies/mv3-requirements) and [remote hosted code guidance](https://developer.chrome.com/docs/extensions/develop/migrate/remote-hosted-code).
+- **One extension, two kinds of power.** Turn a plain-English request into site CSS and page automation, then save a useful result as a site-scoped userscript.
+- **Your AI, your keys, your data.** Use your own OpenAI, Anthropic, or DeepSeek key directly from the extension. No required account, hosted service, or cloud copy of your scripts.
+- **Native userscript execution.** Scripts, dependencies, resources, stored values, updates, and GM-compatible APIs run through Chrome's User Scripts platform—not a fragile in-extension code runner.
+- **Inspectable before permanent.** Preview CSS first, then explicitly keep or discard it. AI-drafted userscripts open in the editor; they never silently run themselves.
+- **Built to grow with you.** Import existing scripts, load scripts from a URL, manage updates, export JSON backups, and control exactly when and where every script runs.
+
+### Chrome requirement
+
+Frameweave needs Chrome 135+ for its **Run now** button: that feature launches an enabled userscript on demand in the tab you already have open. Regular site-matched scripts run automatically according to their metadata. In Chrome 138+, turn on **Allow User Scripts** in Frameweave's extension Details page. On earlier compatible Chrome versions, keep **Developer mode** enabled. See the [Chrome User Scripts API](https://developer.chrome.com/docs/extensions/reference/api/userScripts).
 
 ## Capabilities
 
