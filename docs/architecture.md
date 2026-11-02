@@ -31,6 +31,7 @@ flowchart TD
 
 - `byok` calls `generateLayoutPayload()` with a provider key from `chrome.storage.local`.
 - Each direct provider keeps its own API base URL, model ID, and key. The custom provider uses OpenAI-compatible Chat Completions for both layout and userscript generation. Endpoint normalization is shared with settings validation; the backend adapter retains its separate contract.
+- `PROVIDER_PRESETS` in `src/storage.js` is the source for provider labels, default URLs, protocol routing, and optional local authentication. `src/providerModels.js` reads and normalizes live catalogs; the popup debounces key input and cancels stale requests. Discovery never persists a key or selects a model. BYOK settings reject an empty model, while backend settings are exempt.
 - `backend` calls the configured HTTPS endpoint using the same request/response contract.
 
 `src/aiClient.js` validates the exact outer JSON shape before deployment. `src/injector.js` parses the inner `AutomationProgram`, rejects unsupported fields, and passes only data to its static execution function.

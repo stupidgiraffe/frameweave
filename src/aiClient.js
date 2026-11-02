@@ -1,4 +1,4 @@
-import { providerEndpoint } from "./storage.js";
+import { providerEndpoint, PROVIDER_PRESETS } from "./storage.js";
 
 export const LAYOUT_PAYLOAD_SCHEMA = Object.freeze({
   type: "object",
@@ -519,13 +519,12 @@ async function generateAnthropic(input, config) {
   return parseLayoutPayload(toolInput, "Anthropic");
 }
 
-async function generateDeepSeek(input, config) {
-  const custom = config.provider === "custom";
-  const label = custom ? "Custom provider" : "DeepSeek";
+async function generateChatCompletions(input, config) {
+  const label = PROVIDER_PRESETS[config.provider].label;
   const userMessage = buildUserMessage(input);
   emitProgress(input.onProgress, { phase: "requesting", provider: config.provider || "deepseek" });
   const response = await checkedFetch(
-    resolveProviderEndpoint(config, custom ? "custom" : "deepseek"),
+    resolveProviderEndpoint(config),
     {
       method: "POST",
       signal: input.signal,
@@ -551,7 +550,7 @@ async function generateDeepSeek(input, config) {
         temperature: 0.2,
         max_tokens: input.maxOutputTokens,
         stream: true,
-        ...(!custom ? { stream_options: { include_usage: true } } : {})
+        ...(config.provider === "deepseek" ? { stream_options: { include_usage: true } } : {})
       })
     },
     label
@@ -586,7 +585,8 @@ class ByokAdapter {
     const apiKey = boundedText(this.config.apiKey, 4096);
     const model = boundedText(this.config.model, 128);
 
-    if (!apiKey && provider !== "custom") {
+    if (!PROVIDER_PRESETS[provider]) throw new AIClientError("unsupported_provider", "The selected direct provider is not supported.");
+    if (!apiKey && !PROVIDER_PRESETS[provider].keyOptional) {
       throw new AIClientError("missing_api_key", "Save an API key for the selected provider first.");
     }
     if (!model) {
@@ -594,14 +594,13 @@ class ByokAdapter {
     }
 
     const config = { ...this.config, apiKey, model };
-    switch (provider) {
-      case "openai":
+    switch (PROVIDER_PRESETS[provider].api) {
+      case "responses":
         return generateOpenAI(input, config);
       case "anthropic":
         return generateAnthropic(input, config);
-      case "deepseek":
-      case "custom":
-        return generateDeepSeek(input, config);
+      case "chat":
+        return generateChatCompletions(input, config);
       default:
         throw new AIClientError("unsupported_provider", "The selected direct provider is not supported.");
     }
@@ -1015,12 +1014,11 @@ async function generateAnthropicUserScript(input, config) {
   return parseUserScriptPayload(toolUse && toolUse.input, "Anthropic");
 }
 
-async function generateDeepSeekUserScript(input, config) {
-  const custom = config.provider === "custom";
-  const label = custom ? "Custom provider" : "DeepSeek";
+async function generateChatCompletionsUserScript(input, config) {
+  const label = PROVIDER_PRESETS[config.provider].label;
   emitProgress(input.onProgress, { phase: "requesting", provider: config.provider || "deepseek" });
   const response = await checkedFetch(
-    resolveProviderEndpoint(config, custom ? "custom" : "deepseek"),
+    resolveProviderEndpoint(config),
     {
       method: "POST",
       signal: input.signal,
@@ -1090,21 +1088,21 @@ export async function generateUserScriptDraft(settings, rawInput) {
   if (settings.routeMode === "backend") {
     return generateBackendUserScript(input, settings);
   }
-  if (!apiKey && settings.provider !== "custom") {
+  if (!PROVIDER_PRESETS[settings.provider]) throw new AIClientError("unsupported_provider", "The selected direct provider is not supported.");
+  if (!apiKey && !PROVIDER_PRESETS[settings.provider].keyOptional) {
     throw new AIClientError("missing_api_key", "Save an API key for the selected provider first.");
   }
   if (!model) {
     throw new AIClientError("missing_model", "Enter a model ID for the selected provider.");
   }
   const config = { ...settings, apiKey, model };
-  switch (settings.provider) {
-    case "openai":
+  switch (PROVIDER_PRESETS[settings.provider].api) {
+    case "responses":
       return generateOpenAIUserScript(input, config);
     case "anthropic":
       return generateAnthropicUserScript(input, config);
-    case "deepseek":
-    case "custom":
-      return generateDeepSeekUserScript(input, config);
+    case "chat":
+      return generateChatCompletionsUserScript(input, config);
     default:
       throw new AIClientError("unsupported_provider", "The selected direct provider is not supported.");
   }

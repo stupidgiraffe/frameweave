@@ -45,20 +45,11 @@
 
         <section id="byok-settings" class="settings-section" aria-label="Direct provider settings">
           <label for="provider">Provider</label>
-          <select id="provider" name="provider">
-            <option value="openai">OpenAI Responses API</option>
-            <option value="anthropic">Anthropic Messages API</option>
-            <option value="deepseek">DeepSeek Chat API</option>
-            <option value="custom">Custom OpenAI-compatible (Chat Completions)</option>
-          </select>
+          <select id="provider" name="provider"></select>
 
           <label for="provider-base-url">Provider API base URL</label>
           <input id="provider-base-url" name="providerBaseUrl" type="url" maxlength="2048" autocomplete="off" spellcheck="false" placeholder="https://your-provider.example/v1" aria-describedby="provider-url-hint">
           <p id="provider-url-hint" class="field-hint">Include the API version path, such as /v1. Local servers can use http://localhost:11434/v1.</p>
-
-          <label for="model">Model</label>
-          <input id="model" name="model" type="text" maxlength="128" autocomplete="off" spellcheck="false">
-          <p class="field-hint">Enter the model ID provided by your service.</p>
 
           <label for="api-key">Provider API key</label>
           <div class="secret-row">
@@ -66,6 +57,14 @@
             <button id="clear-provider-key" class="quiet-button" type="button">Clear</button>
           </div>
           <p id="provider-key-state" class="field-hint"></p>
+
+          <label for="model">Model — search or select</label>
+          <div class="secret-row">
+            <input id="model" name="model" type="text" list="provider-models" maxlength="128" autocomplete="off" spellcheck="false" placeholder="Choose a model or enter its ID" aria-describedby="model-status" required>
+            <button id="refresh-models" class="quiet-button" type="button">Refresh models</button>
+          </div>
+          <datalist id="provider-models"></datalist>
+          <p id="model-status" class="field-hint" role="status" aria-live="polite">Paste your API key to load current models. A model is required to save.</p>
         </section>
 
         <section id="backend-settings" class="settings-section is-hidden" aria-label="Backend adapter settings">

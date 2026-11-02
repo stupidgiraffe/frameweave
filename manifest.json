@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Frameweave",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A local-first AI workspace for page layouts, userscripts, and browser automation.",
   "minimum_chrome_version": "135",
   "icons": {
