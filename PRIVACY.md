@@ -5,7 +5,7 @@
 Frameweave stores the following in `chrome.storage.local` in the current browser profile:
 
 - provider API keys and optional backend token;
-- provider/model and extraction settings;
+- provider/model, API base URLs, and extraction settings;
 - userscript source, metadata, local values, execution order, update state, and cached `@require` / `@resource` assets;
 - aggregate local activity counters.
 
@@ -15,7 +15,7 @@ The popup's element target and layout preview state use `chrome.storage.session`
 
 Frameweave contacts only destinations selected or encoded by the user:
 
-- the selected direct model provider when Direct BYOK is used;
+- the selected direct model provider, including a user-configured API base URL or local model server, when Direct BYOK is used;
 - the configured HTTPS backend endpoint when backend mode is selected;
 - script URLs, `@require` URLs, `@resource` URLs, `@updateURL`/`@downloadURL` URLs, and destinations requested by a userscript through `GM_xmlhttpRequest`.
 

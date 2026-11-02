@@ -1,3 +1,5 @@
+import { providerEndpoint } from "./storage.js";
+
 export const LAYOUT_PAYLOAD_SCHEMA = Object.freeze({
   type: "object",
   additionalProperties: false,
@@ -109,7 +111,7 @@ async function responseError(response, provider) {
 async function checkedFetch(url, options, provider) {
   let response;
   try {
-    response = await fetch(url, options);
+    response = await fetch(url, { ...options, redirect: "error" });
   } catch (error) {
     if (error && error.name === "AbortError") {
       throw new AIClientError("request_cancelled", "The generation request was cancelled.");
@@ -176,7 +178,8 @@ export async function consumeSse(response, onEvent) {
       break;
     }
 
-    buffer += decoder.decode(result.value, { stream: true }).replace(/\r\n/g, "\n");
+    buffer += decoder.decode(result.value, { stream: true });
+    buffer = buffer.replace(/\r\n/g, "\n");
     let boundary = buffer.indexOf("\n\n");
     while (boundary >= 0) {
       dispatchBlock(buffer.slice(0, boundary));
@@ -185,7 +188,8 @@ export async function consumeSse(response, onEvent) {
     }
   }
 
-  buffer += decoder.decode().replace(/\r\n/g, "\n");
+  buffer += decoder.decode();
+  buffer = buffer.replace(/\r\n/g, "\n");
   if (buffer.trim()) {
     dispatchBlock(buffer);
   }
@@ -370,11 +374,16 @@ function throwOnStreamError(event, provider) {
   }
 }
 
+function resolveProviderEndpoint(config, provider = config.provider) {
+  try { return providerEndpoint(provider, config.baseUrl); }
+  catch (error) { throw new AIClientError("invalid_provider_endpoint", error.message); }
+}
+
 async function generateOpenAI(input, config) {
   const userMessage = buildUserMessage(input);
   emitProgress(input.onProgress, { phase: "requesting", provider: "openai" });
   const response = await checkedFetch(
-    "https://api.openai.com/v1/responses",
+    resolveProviderEndpoint(config, "openai"),
     {
       method: "POST",
       signal: input.signal,
@@ -438,14 +447,15 @@ async function generateAnthropic(input, config) {
   const userMessage = buildUserMessage(input);
   emitProgress(input.onProgress, { phase: "requesting", provider: "anthropic" });
   const response = await checkedFetch(
-    "https://api.anthropic.com/v1/messages",
+    resolveProviderEndpoint(config, "anthropic"),
     {
       method: "POST",
       signal: input.signal,
       headers: {
         "Content-Type": "application/json",
         "x-api-key": config.apiKey,
-        "anthropic-version": "2023-06-01"
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
         model: config.model,
@@ -510,16 +520,18 @@ async function generateAnthropic(input, config) {
 }
 
 async function generateDeepSeek(input, config) {
+  const custom = config.provider === "custom";
+  const label = custom ? "Custom provider" : "DeepSeek";
   const userMessage = buildUserMessage(input);
-  emitProgress(input.onProgress, { phase: "requesting", provider: "deepseek" });
+  emitProgress(input.onProgress, { phase: "requesting", provider: config.provider || "deepseek" });
   const response = await checkedFetch(
-    "https://api.deepseek.com/chat/completions",
+    resolveProviderEndpoint(config, custom ? "custom" : "deepseek"),
     {
       method: "POST",
       signal: input.signal,
       headers: {
         "Content-Type": "application/json",
-        Authorization: "Bearer " + config.apiKey
+        ...(config.apiKey ? { Authorization: "Bearer " + config.apiKey } : {})
       },
       body: JSON.stringify({
         model: config.model,
@@ -539,22 +551,20 @@ async function generateDeepSeek(input, config) {
         temperature: 0.2,
         max_tokens: input.maxOutputTokens,
         stream: true,
-        stream_options: {
-          include_usage: true
-        }
+        ...(!custom ? { stream_options: { include_usage: true } } : {})
       })
     },
-    "DeepSeek"
+    label
   );
 
   if (!isSseResponse(response)) {
-    return parseLayoutPayload(extractDeepSeekText(await response.json()), "DeepSeek");
+    return parseLayoutPayload(extractDeepSeekText(await response.json()), label);
   }
 
   let streamedText = "";
   const report = makeProgressReporter(input.onProgress);
   await consumeSse(response, (event) => {
-    throwOnStreamError(event, "DeepSeek");
+    throwOnStreamError(event, label);
     const choice = event && Array.isArray(event.choices) ? event.choices[0] : null;
     const delta = choice && choice.delta ? choice.delta.content : "";
     if (typeof delta === "string") {
@@ -563,7 +573,7 @@ async function generateDeepSeek(input, config) {
     }
   });
 
-  return parseLayoutPayload(streamedText, "DeepSeek");
+  return parseLayoutPayload(streamedText, label);
 }
 
 class ByokAdapter {
@@ -576,25 +586,22 @@ class ByokAdapter {
     const apiKey = boundedText(this.config.apiKey, 4096);
     const model = boundedText(this.config.model, 128);
 
-    if (!apiKey) {
+    if (!apiKey && provider !== "custom") {
       throw new AIClientError("missing_api_key", "Save an API key for the selected provider first.");
     }
     if (!model) {
       throw new AIClientError("missing_model", "Enter a model ID for the selected provider.");
     }
 
-    const request = {
-      ...input,
-      apiKey,
-      model
-    };
+    const config = { ...this.config, apiKey, model };
     switch (provider) {
       case "openai":
-        return generateOpenAI(request, request);
+        return generateOpenAI(input, config);
       case "anthropic":
-        return generateAnthropic(request, request);
+        return generateAnthropic(input, config);
       case "deepseek":
-        return generateDeepSeek(request, request);
+      case "custom":
+        return generateDeepSeek(input, config);
       default:
         throw new AIClientError("unsupported_provider", "The selected direct provider is not supported.");
     }
@@ -933,7 +940,7 @@ function buildUserScriptGenerationMessage(input) {
 async function generateOpenAIUserScript(input, config) {
   emitProgress(input.onProgress, { phase: "requesting", provider: "openai" });
   const response = await checkedFetch(
-    "https://api.openai.com/v1/responses",
+    resolveProviderEndpoint(config, "openai"),
     {
       method: "POST",
       signal: input.signal,
@@ -969,14 +976,15 @@ async function generateOpenAIUserScript(input, config) {
 async function generateAnthropicUserScript(input, config) {
   emitProgress(input.onProgress, { phase: "requesting", provider: "anthropic" });
   const response = await checkedFetch(
-    "https://api.anthropic.com/v1/messages",
+    resolveProviderEndpoint(config, "anthropic"),
     {
       method: "POST",
       signal: input.signal,
       headers: {
         "Content-Type": "application/json",
         "x-api-key": config.apiKey,
-        "anthropic-version": "2023-06-01"
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
         model: config.model,
@@ -1008,15 +1016,17 @@ async function generateAnthropicUserScript(input, config) {
 }
 
 async function generateDeepSeekUserScript(input, config) {
-  emitProgress(input.onProgress, { phase: "requesting", provider: "deepseek" });
+  const custom = config.provider === "custom";
+  const label = custom ? "Custom provider" : "DeepSeek";
+  emitProgress(input.onProgress, { phase: "requesting", provider: config.provider || "deepseek" });
   const response = await checkedFetch(
-    "https://api.deepseek.com/chat/completions",
+    resolveProviderEndpoint(config, custom ? "custom" : "deepseek"),
     {
       method: "POST",
       signal: input.signal,
       headers: {
         "Content-Type": "application/json",
-        Authorization: "Bearer " + config.apiKey
+        ...(config.apiKey ? { Authorization: "Bearer " + config.apiKey } : {})
       },
       body: JSON.stringify({
         model: config.model,
@@ -1029,10 +1039,10 @@ async function generateDeepSeekUserScript(input, config) {
         max_tokens: input.maxOutputTokens
       })
     },
-    "DeepSeek"
+    label
   );
-  emitProgress(input.onProgress, { phase: "generating", provider: "deepseek" });
-  return parseUserScriptPayload(extractDeepSeekText(await response.json()), "DeepSeek");
+  emitProgress(input.onProgress, { phase: "generating", provider: config.provider || "deepseek" });
+  return parseUserScriptPayload(extractDeepSeekText(await response.json()), label);
 }
 
 async function generateBackendUserScript(input, config) {
@@ -1080,7 +1090,7 @@ export async function generateUserScriptDraft(settings, rawInput) {
   if (settings.routeMode === "backend") {
     return generateBackendUserScript(input, settings);
   }
-  if (!apiKey) {
+  if (!apiKey && settings.provider !== "custom") {
     throw new AIClientError("missing_api_key", "Save an API key for the selected provider first.");
   }
   if (!model) {
@@ -1093,6 +1103,7 @@ export async function generateUserScriptDraft(settings, rawInput) {
     case "anthropic":
       return generateAnthropicUserScript(input, config);
     case "deepseek":
+    case "custom":
       return generateDeepSeekUserScript(input, config);
     default:
       throw new AIClientError("unsupported_provider", "The selected direct provider is not supported.");

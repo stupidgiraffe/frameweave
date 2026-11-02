@@ -46,13 +46,19 @@
         <section id="byok-settings" class="settings-section" aria-label="Direct provider settings">
           <label for="provider">Provider</label>
           <select id="provider" name="provider">
-            <option value="openai">OpenAI-compatible Responses API</option>
+            <option value="openai">OpenAI Responses API</option>
             <option value="anthropic">Anthropic Messages API</option>
             <option value="deepseek">DeepSeek Chat API</option>
+            <option value="custom">Custom OpenAI-compatible (Chat Completions)</option>
           </select>
+
+          <label for="provider-base-url">Provider API base URL</label>
+          <input id="provider-base-url" name="providerBaseUrl" type="url" maxlength="2048" autocomplete="off" spellcheck="false" placeholder="https://your-provider.example/v1" aria-describedby="provider-url-hint">
+          <p id="provider-url-hint" class="field-hint">Include the API version path, such as /v1. Local servers can use http://localhost:11434/v1.</p>
 
           <label for="model">Model</label>
           <input id="model" name="model" type="text" maxlength="128" autocomplete="off" spellcheck="false">
+          <p class="field-hint">Enter the model ID provided by your service.</p>
 
           <label for="api-key">Provider API key</label>
           <div class="secret-row">

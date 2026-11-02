@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1
+
+- Added custom OpenAI-compatible BYOK with an editable API base URL, model ID, and optional key for local servers.
+- Added editable API base URLs for existing providers; preserved saved keys and models during migration and provider switching.
+- Connected custom endpoints to both layout generation and AI userscript drafting, including streamed layout responses.
+- Fixed SSE event parsing when CRLF separators span network chunks and added Anthropic's direct-browser request header.
+- Reject provider URLs containing embedded credentials and prevent credential-bearing AI requests from following redirects.
+- Added regression coverage for provider storage, routing, streaming, URL validation, popup saving, and backend-route isolation.
+
 ## 1.0.0
 
 - Established Frameweave as a Manifest V3 local-first BYOK workspace.

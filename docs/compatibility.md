@@ -42,6 +42,7 @@ Run in a fresh Chrome profile after loading the unpacked extension.
 
 1. Confirm the manifest loads without errors and **Allow User Scripts** is enabled.
 2. Open a normal HTTPS page. Save an OpenAI, Anthropic, and DeepSeek test key independently; generate one layout preview for each provider.
+   Also test **Custom OpenAI-compatible (Chat Completions)** with your provider's API base URL and model ID: save, reopen, preview, and generate a userscript draft. Confirm switching back to a preset restores its saved URL/model/key status. For local servers, test an HTTP loopback URL without a key if authentication is disabled.
 3. Confirm Preview, Keep, Discard, and Remove correctly affect CSS and that **Save current CSS as userscript** produces a registered script.
 4. Create a `USER_SCRIPT` script using GM values, a `MAIN` script using page globals, and a `@grant none` script. Verify each runs at its selected run-at value.
 5. Import a `.user.js` with `@match`, `@include`, exclusions, `@require`, and `@resource`; save and reload the target page.
