@@ -66,8 +66,8 @@ let modelController = null;
 let modelsLoading = false;
 let availableModels = [];
 
-function renderModels() {
-  const search = elements.model.value.trim().toLowerCase();
+function renderModels(query = "") {
+  const search = query.trim().toLowerCase();
   const matching = availableModels.filter(model => !search || model.id.toLowerCase().includes(search) || model.name.toLowerCase().includes(search));
   elements.providerModels.replaceChildren(...matching.map(model => {
     const option = document.createElement("option");
@@ -410,7 +410,7 @@ function providerUrlEdited() {
 }
 elements.providerBaseUrl.addEventListener("input", providerUrlEdited);
 elements.providerBaseUrl.addEventListener("change", providerUrlEdited);
-elements.model.addEventListener("input", () => { renderModels(); refreshActionAvailability(); });
+elements.model.addEventListener("input", () => { renderModels(elements.model.value); refreshActionAvailability(); });
 elements.model.addEventListener("change", refreshActionAvailability);
 elements.providerModels.addEventListener("change", () => {
   if (elements.providerModels.value) elements.model.value = elements.providerModels.value;
