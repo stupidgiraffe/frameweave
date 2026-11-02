@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3
+
+- Replaced the native datalist with a visible, searchable model list that works with mobile browsers.
+- Removed popup-closing confirmation dialogs from key and token clearing, preserving current provider and form state.
+- Retain text models when optional JSON capability metadata is incomplete.
+
 ## 1.0.2
 
 - Added live model discovery after pasting a key and when reopening saved provider settings, with searchable suggestions, Refresh models, and manual model IDs.

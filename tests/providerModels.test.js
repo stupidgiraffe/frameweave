@@ -43,7 +43,6 @@ test("OpenRouter models are fetched with the typed key and normalized for a text
       { id: "vendor/z-model:free", name: "Z Model", architecture: { output_modalities: ["text"] } },
       { id: "vendor/a-model", name: "A Model", architecture: { output_modalities: ["text"] } },
       { id: "vendor/image", architecture: { output_modalities: ["image"] } },
-      { id: "vendor/no-json", supported_parameters: ["temperature"] },
       { id: "vendor/z-model:free", name: "Duplicate" },
       { id: "" }
     ] }));

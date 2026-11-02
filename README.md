@@ -7,7 +7,7 @@ Frameweave is a local-first, bring-your-own-key browser workspace for two jobs t
 
 No hosted service is required for the open-source base. Provider keys, scripts, values, assets, backups, and layout telemetry remain in the browser's local extension storage unless the user explicitly selects the optional backend adapter.
 
-> Status: v1.0.2 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
+> Status: v1.0.3 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
 
 ## Why Frameweave
 
@@ -28,7 +28,7 @@ Frameweave needs Chrome 135+ for its **Run now** button: that feature launches a
 ### AI layout workspace
 
 - Direct BYOK adapters for OpenAI Responses, Anthropic Messages, DeepSeek Chat, and custom OpenAI-compatible Chat Completions. All adapters have editable API base URLs.
-- Live model discovery with searchable model suggestions, automatic fetching after key entry and on reopening saved settings, and a manual Refresh button. Known non-text models and explicitly incompatible API/JSON capabilities are filtered; manual IDs remain available for private or unlisted models.
+- Live model discovery with a searchable visible model list, automatic fetching after key entry and on reopening saved settings, and a manual Refresh button. Known non-text models and explicitly incompatible API capabilities are filtered; manual IDs remain available for private or unlisted models.
 - A central adapter route: `byok` sends directly to the selected provider; `backend` posts to a configurable HTTPS endpoint for a future hosted tier.
 - Token-efficient DOM extraction: tags, stable IDs, structural classes, hierarchy, layout signals, and selected-element hints only. It excludes page text, image data, scripts, form values, and article payloads.
 - Strict response contract. Every layout adapter must return exactly:
@@ -84,7 +84,7 @@ Use dedicated, revocable API keys with spend limits. `chrome.storage.local` is b
 
 ### Use your own model provider
 
-In the popup, select **Direct BYOK**, choose a provider, and paste its API key. Frameweave fills the API URL and loads the provider's current model list. Click the **Model** field to select a model, or type to search by model ID. Choose **Save settings** after selecting a model. An empty model blocks saving and generation; new installations have no preselected model. These settings apply to both layout generation and AI userscript drafting.
+In the popup, select **Direct BYOK**, choose a provider, and paste its API key. Frameweave fills the API URL and loads the provider's current model list. Select a model from the visible list, or type in the **Model ID** field to filter the list or enter an ID. Choose **Save settings** after selecting a model. An empty model blocks saving and generation; new installations have no preselected model. These settings apply to both layout generation and AI userscript drafting.
 
 | Preset | Default API base URL |
 | --- | --- |

@@ -142,3 +142,22 @@ test("editing an unsaved URL cannot automatically send a saved key to a new orig
   await waitFor(() => /loaded/i.test(elements["model-status"].textContent));
   assert.deepEqual(requests[1], { url: "https://new-provider.example/v2/models", key: "Bearer new-provider-key" });
 });
+
+test("visible model list selects an ID and clearing a key keeps the popup and provider intact", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ data: [{ id: "vendor/model", name: "Example Model" }] })));
+  const { elements, values } = await popup(t, {
+    "frameweave.settings.v1": { provider: "openrouter", models: { openrouter: "vendor/model" } },
+    "frameweave.secrets.v1": { providerKeys: { openrouter: "saved-secret" } }
+  });
+  await waitFor(() => /loaded/i.test(elements["model-status"].textContent));
+  globalThis.window.confirm = () => { throw new Error("Native confirmation closes the popup"); };
+  elements["provider-models"].value = "vendor/model";
+  elements["provider-models"].dispatchEvent(new Event("change"));
+  assert.equal(elements.model.value, "vendor/model");
+  elements["clear-provider-key"].dispatchEvent(new Event("click"));
+  await waitFor(() => elements.status.textContent === "Saved provider key removed.");
+  assert.equal(values["frameweave.secrets.v1"].providerKeys.openrouter, "");
+  assert.equal(elements.provider.value, "openrouter");
+  assert.equal(elements.model.value, "vendor/model");
+  assert.equal(elements["api-key"].value, "");
+});

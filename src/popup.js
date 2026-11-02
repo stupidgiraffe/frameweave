@@ -64,6 +64,19 @@ let modelRequest = 0;
 let modelTimer = null;
 let modelController = null;
 let modelsLoading = false;
+let availableModels = [];
+
+function renderModels(query = "") {
+  const search = query.trim().toLowerCase();
+  const matching = availableModels.filter(model => !search || model.id.toLowerCase().includes(search) || model.name.toLowerCase().includes(search));
+  elements.providerModels.replaceChildren(...matching.map(model => {
+    const option = document.createElement("option");
+    option.value = model.id;
+    option.textContent = model.name === model.id ? model.id : model.name + " — " + model.id;
+    return option;
+  }));
+  elements.providerModels.selectedIndex = -1;
+}
 
 elements.provider.replaceChildren(...Object.entries(PROVIDER_PRESETS).map(([id, preset]) => {
   const option = document.createElement("option");
@@ -82,6 +95,7 @@ function cancelModelFetch() {
 
 function scheduleModelFetch(delay = 400) {
   cancelModelFetch();
+  availableModels = [];
   elements.providerModels.replaceChildren();
   refreshActionAvailability();
   if (!publicSettings || selectedRoute() !== "byok") return;
@@ -117,14 +131,10 @@ async function loadModels(request) {
     }
     const models = await fetchProviderModels({ provider, baseUrl, apiKey: typedKey || saved.apiKey, signal: controller.signal });
     if (request !== modelRequest) return;
-    elements.providerModels.replaceChildren(...models.map(model => {
-      const option = document.createElement("option");
-      option.value = model.id;
-      option.label = model.name;
-      return option;
-    }));
+    availableModels = models;
+    renderModels();
     elements.modelStatus.textContent = models.length
-      ? models.length + " text model(s) loaded. Choose from the model field or type an ID."
+      ? models.length + " text model(s) loaded. Select one below or type an ID."
       : "No compatible text models were listed. Check the key permissions or enter a model ID manually.";
   } catch (error) {
     if (request === modelRequest) elements.modelStatus.textContent = error.message || "Could not fetch models. Enter a model ID manually.";
@@ -393,39 +403,47 @@ elements.apiKey.addEventListener("input", () => scheduleModelFetch());
 elements.apiKey.addEventListener("change", () => scheduleModelFetch(0));
 function providerUrlEdited() {
   cancelModelFetch();
+  availableModels = [];
   elements.providerModels.replaceChildren();
   elements.modelStatus.textContent = "Provider URL changed. Choose Refresh models when the URL is complete.";
   refreshActionAvailability();
 }
 elements.providerBaseUrl.addEventListener("input", providerUrlEdited);
 elements.providerBaseUrl.addEventListener("change", providerUrlEdited);
-elements.model.addEventListener("input", refreshActionAvailability);
+elements.model.addEventListener("input", () => { renderModels(elements.model.value); refreshActionAvailability(); });
 elements.model.addEventListener("change", refreshActionAvailability);
+elements.providerModels.addEventListener("change", () => {
+  if (elements.providerModels.value) elements.model.value = elements.providerModels.value;
+  refreshActionAvailability();
+});
 elements.refreshModels.addEventListener("click", () => scheduleModelFetch(0));
 window.addEventListener("pagehide", cancelModelFetch);
 
 elements.clearProviderKey.addEventListener("click", () => {
-  if (busy || !window.confirm("Remove the saved API key for this provider from this browser?")) {
+  if (busy) {
     return;
   }
 
   setBusy(true);
+  cancelModelFetch();
+  elements.apiKey.value = "";
   void clearProviderApiKey(elements.provider.value)
-    .then(reloadSettings)
-    .then(() => setStatus("Saved provider key removed.", "success"))
+    .then(getPublicSettings)
+    .then((settings) => { publicSettings = settings; refreshSecretState(); scheduleModelFetch(0); setStatus("Saved provider key removed.", "success"); })
     .catch((error) => setStatus(String(error.message || error), "error"))
     .finally(() => setBusy(false));
 });
 
 elements.clearBackendToken.addEventListener("click", () => {
-  if (busy || !window.confirm("Remove the saved backend token from this browser?")) {
+  if (busy) {
     return;
   }
 
   setBusy(true);
+  elements.backendToken.value = "";
   void clearBackendToken()
-    .then(reloadSettings)
-    .then(() => setStatus("Saved backend token removed.", "success"))
+    .then(getPublicSettings)
+    .then((settings) => { publicSettings = settings; refreshSecretState(); setStatus("Saved backend token removed.", "success"); })
     .catch((error) => setStatus(String(error.message || error), "error"))
     .finally(() => setBusy(false));
 });
