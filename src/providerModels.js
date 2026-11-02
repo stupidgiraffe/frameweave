@@ -20,7 +20,6 @@ function normalizeModels(body, preset) {
     const endpoints = tokens(model.endpoints);
     const expected = { chat: "chat_completions", responses: "responses", anthropic: "claude_api" }[preset.api];
     if (endpoints.length && !endpoints.includes(expected)) continue;
-    if (Array.isArray(model.supported_parameters) && !model.supported_parameters.some(parameter => ["response_format", "structured_outputs", "json_schema"].includes(parameter))) continue;
     if (/(^|[/_-])(embedding|embeddings|rerank|whisper|tts|dall-e|moderation|transcribe|transcription|realtime|audio|image|sora)([/_.:-]|$)/i.test(id)) continue;
     const name = model.name || model.display_name || model.model_name || id;
     models.set(id, { id, name: typeof name === "string" ? name.slice(0, 180) : id });
