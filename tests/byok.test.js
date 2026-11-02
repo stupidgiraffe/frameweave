@@ -27,6 +27,7 @@ function installStorage(t) {
 test("custom URL/model/key survive storage and switching providers without exposing secrets", async (t) => {
   installStorage(t);
   await storage.initializeStorage();
+  await storage.saveSettingsPatch({ provider: "openai", model: "previously-selected-model" });
   await storage.setProviderApiKey("openai", "preset-secret");
   await storage.saveSettingsPatch({ provider: "custom", baseUrl: "https://gateway.example/v1/chat/completions/", model: "vendor/model:free" });
   await storage.setProviderApiKey("custom", "custom-secret");
@@ -44,6 +45,18 @@ test("custom URL/model/key survive storage and switching providers without expos
   assert.equal(runtime.baseUrl, "https://api.openai.com/v1");
   await storage.saveSettingsPatch({ provider: "custom" });
   assert.equal((await storage.getRuntimeSettings()).model, "vendor/model:free");
+});
+
+test("BYOK saves reject an empty model without changing saved settings", async (t) => {
+  const values = installStorage(t);
+  await storage.initializeStorage();
+  await storage.saveSettingsPatch({ provider: "openai", model: "selected-model" });
+  const before = structuredClone(values);
+  await assert.rejects(storage.saveSettingsPatch({ provider: "openai", model: "   " }), /select.*model|model.*required/i);
+  assert.deepEqual(values, before);
+  await assert.rejects(storage.saveSettingsPatch({ provider: "custom", baseUrl: "https://gateway.example/v1", model: "" }), /select.*model|model.*required/i);
+  await storage.saveSettingsPatch({ routeMode: "backend", provider: "custom", model: "", backendEndpoint: "https://backend.example/layout" });
+  assert.equal((await storage.getRuntimeSettings()).routeMode, "backend");
 });
 
 test("existing settings migrate with preset endpoints and keys intact", async (t) => {
@@ -151,6 +164,7 @@ test("Anthropic opts into direct browser access for both generation operations",
 });
 
 test("popup lets users save a custom provider and restores its URL when switching back", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ data: [] })));
   installStorage(t);
   await storage.initializeStorage();
   const previousDocument = globalThis.document;
@@ -162,17 +176,20 @@ test("popup lets users save a custom provider and restores its URL when switchin
     checked = false;
     disabled = false;
     classList = { toggle() {} };
+    replaceChildren() {}
   }
   const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(([, id]) => ["#" + id, new Element()]));
   const routes = ["byok", "backend"].map(value => Object.assign(new Element(), { value }));
   globalThis.document = {
     querySelector(selector) { assert.ok(elements[selector], "Popup selector missing from HTML: " + selector); return elements[selector]; },
-    querySelectorAll() { return routes; }
+    querySelectorAll() { return routes; },
+    createElement() { return new Element(); }
   };
-  globalThis.window = { confirm: () => true };
+  globalThis.window = Object.assign(new EventTarget(), { confirm: () => true });
   const listener = { addListener() {} };
   globalThis.chrome.runtime = { connect: () => ({ postMessage() {}, onMessage: listener, onDisconnect: listener }) };
   t.after(() => {
+    globalThis.window.dispatchEvent(new Event("pagehide"));
     if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument;
     if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow;
   });

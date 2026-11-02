@@ -7,14 +7,14 @@ Frameweave is a local-first, bring-your-own-key browser workspace for two jobs t
 
 No hosted service is required for the open-source base. Provider keys, scripts, values, assets, backups, and layout telemetry remain in the browser's local extension storage unless the user explicitly selects the optional backend adapter.
 
-> Status: v1.0.1 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
+> Status: v1.0.2 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
 
 ## Why Frameweave
 
 Frameweave combines an AI-powered page-customization workspace with a serious, native userscript manager. It is built for people who want to reshape the web instead of merely browse it: describe a change, inspect the result, keep what works, and build a reusable library of scripts that travel with you.
 
 - **One extension, two kinds of power.** Turn a plain-English request into site CSS and page automation, then save a useful result as a site-scoped userscript.
-- **Your AI, your keys, your data.** Use OpenAI, Anthropic, DeepSeek, or a custom OpenAI-compatible provider with your own URL and model ID. No required account, hosted service, or cloud copy of your scripts.
+- **Your AI, your keys, your data.** Choose a provider preset, paste your key, and select a model from its current catalog. Custom OpenAI-compatible URLs and local servers are supported. No required account, hosted service, or cloud copy of your scripts.
 - **Native userscript execution.** Scripts, dependencies, resources, stored values, updates, and GM-compatible APIs run through Chrome's User Scripts platform—not a fragile in-extension code runner.
 - **Inspectable before permanent.** Preview CSS first, then explicitly keep or discard it. AI-drafted userscripts open in the editor; they never silently run themselves.
 - **Built to grow with you.** Import existing scripts, load scripts from a URL, manage updates, export JSON backups, and control exactly when and where every script runs.
@@ -28,6 +28,7 @@ Frameweave needs Chrome 135+ for its **Run now** button: that feature launches a
 ### AI layout workspace
 
 - Direct BYOK adapters for OpenAI Responses, Anthropic Messages, DeepSeek Chat, and custom OpenAI-compatible Chat Completions. All adapters have editable API base URLs.
+- Live model discovery with searchable model suggestions, automatic fetching after key entry and on reopening saved settings, and a manual Refresh button. Known non-text models and explicitly incompatible API/JSON capabilities are filtered; manual IDs remain available for private or unlisted models.
 - A central adapter route: `byok` sends directly to the selected provider; `backend` posts to a configurable HTTPS endpoint for a future hosted tier.
 - Token-efficient DOM extraction: tags, stable IDs, structural classes, hierarchy, layout signals, and selected-element hints only. It excludes page text, image data, scripts, form values, and article payloads.
 - Strict response contract. Every layout adapter must return exactly:
@@ -83,11 +84,28 @@ Use dedicated, revocable API keys with spend limits. `chrome.storage.local` is b
 
 ### Use your own model provider
 
-In the popup, select **Direct BYOK → Custom OpenAI-compatible (Chat Completions)**. Paste the provider's **API base URL**, enter its exact **model ID**, add its API key if required, and choose **Save settings**. These settings apply to both layout generation and AI userscript drafting.
+In the popup, select **Direct BYOK**, choose a provider, and paste its API key. Frameweave fills the API URL and loads the provider's current model list. Click the **Model** field to select a model, or type to search by model ID. Choose **Save settings** after selecting a model. An empty model blocks saving and generation; new installations have no preselected model. These settings apply to both layout generation and AI userscript drafting.
+
+| Preset | Default API base URL |
+| --- | --- |
+| OpenAI | `https://api.openai.com/v1` |
+| Anthropic | `https://api.anthropic.com/v1` |
+| DeepSeek | `https://api.deepseek.com` |
+| OpenRouter | `https://openrouter.ai/api/v1` |
+| AIHubMix | `https://aihubmix.com/v1` |
+| Groq | `https://api.groq.com/openai/v1` |
+| Together AI | `https://api.together.ai/v1` |
+| NVIDIA NIM | `https://integrate.api.nvidia.com/v1` |
+| Ollama (local) | `http://localhost:11434/v1` |
+| LM Studio (local) | `http://localhost:1234/v1` |
+
+For another service, choose **Custom OpenAI-compatible**, enter its base URL, then paste its key or click **Refresh models**. Local servers may not require a key. Changing the URL cancels pending discovery; use **Refresh models** once the address is complete. A saved key is not automatically reused for discovery on a different origin: enter the key for the new address explicitly.
 
 Include the provider's API path, for example `https://your-provider.example/v1` or `https://openrouter.ai/api/v1`. A full URL ending in `/chat/completions` is also accepted. Local servers can use `http://localhost:11434/v1` or `http://127.0.0.1:1234/v1`; leave the key blank if the server does not require authentication. Remote URLs require HTTPS.
 
-URLs, models, and saved keys are kept separately for each provider choice. The three presets also accept a custom base URL for compatible proxies. The custom adapter expects Chat Completions with JSON mode (`response_format: json_object`); a provider using another protocol needs its matching adapter. This is separate from **Backend adapter**, which uses Frameweave's own request contract.
+URLs, models, and saved keys are kept separately for each provider choice. Every preset accepts a custom base URL for compatible proxies. If a service does not expose a model list, enter a model ID manually; discovery errors do not erase a saved model. Catalog access does not confirm credits or permission to generate with every listed model. Chat Completions providers must support JSON mode (`response_format: json_object`); a provider using another protocol needs its matching adapter. This is separate from **Backend adapter**, which uses Frameweave's own request contract and does not require a BYOK model.
+
+Discovery uses the configured base URL plus `/models`, with native Anthropic headers and pagination. AIHubMix's default uses its [annotated catalog](https://docs.aihubmix.com/en/api/Models-API) at `https://aihubmix.com/api/v1/models`; a URL override uses the override's `/models` endpoint. Provider references: [OpenRouter](https://openrouter.ai/docs/api/api-reference/models/get-models), [Groq](https://console.groq.com/docs/models), [Together AI](https://docs.together.ai/docs/inference/openai-compatibility), [NVIDIA](https://docs.nvidia.com/nim-operator/latest/guardrail.html), [Ollama](https://docs.ollama.com/api/openai-compatibility), and [LM Studio](https://lmstudio.ai/docs/developer/openai-compat).
 
 ## Permission model
 

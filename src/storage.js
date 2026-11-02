@@ -3,26 +3,26 @@ const SECRETS_KEY = "frameweave.secrets.v1";
 const IMPACT_KEY = "frameweave.impact.v1";
 const PICKED_ELEMENT_PREFIX = "frameweave.picked-element.v1.";
 
-export const PROVIDERS = Object.freeze(["openai", "anthropic", "deepseek", "custom"]);
+export const PROVIDER_PRESETS = Object.freeze({
+  openai: { label: "OpenAI", baseUrl: "https://api.openai.com/v1", api: "responses" },
+  anthropic: { label: "Anthropic", baseUrl: "https://api.anthropic.com/v1", api: "anthropic" },
+  deepseek: { label: "DeepSeek", baseUrl: "https://api.deepseek.com", api: "chat" },
+  openrouter: { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", api: "chat" },
+  aihubmix: { label: "AIHubMix", baseUrl: "https://aihubmix.com/v1", api: "chat", modelsUrl: "https://aihubmix.com/api/v1/models" },
+  groq: { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", api: "chat" },
+  together: { label: "Together AI", baseUrl: "https://api.together.ai/v1", api: "chat" },
+  nvidia: { label: "NVIDIA NIM", baseUrl: "https://integrate.api.nvidia.com/v1", api: "chat" },
+  ollama: { label: "Ollama (local)", baseUrl: "http://localhost:11434/v1", api: "chat", keyOptional: true },
+  lmstudio: { label: "LM Studio (local)", baseUrl: "http://localhost:1234/v1", api: "chat", keyOptional: true },
+  custom: { label: "Custom OpenAI-compatible", baseUrl: "", api: "chat", keyOptional: true }
+});
+export const PROVIDERS = Object.freeze(Object.keys(PROVIDER_PRESETS));
 export const ROUTE_MODES = Object.freeze(["byok", "backend"]);
-
-export const DEFAULT_BASE_URLS = Object.freeze({
-  openai: "https://api.openai.com/v1",
-  anthropic: "https://api.anthropic.com/v1",
-  deepseek: "https://api.deepseek.com",
-  custom: ""
-});
-
-const PROVIDER_PATHS = Object.freeze({
-  openai: "/responses", anthropic: "/messages", deepseek: "/chat/completions", custom: "/chat/completions"
-});
-
-const DEFAULT_MODELS = Object.freeze({
-  openai: "gpt-4.1-mini",
-  anthropic: "claude-sonnet-4-5",
-  deepseek: "deepseek-chat",
-  custom: ""
-});
+export const DEFAULT_BASE_URLS = Object.freeze(Object.fromEntries(PROVIDERS.map(id => [id, PROVIDER_PRESETS[id].baseUrl])));
+const PROVIDER_PATHS = Object.freeze(Object.fromEntries(PROVIDERS.map(id => [id,
+  { responses: "/responses", anthropic: "/messages", chat: "/chat/completions" }[PROVIDER_PRESETS[id].api]
+])));
+const DEFAULT_MODELS = Object.freeze(Object.fromEntries(PROVIDERS.map(id => [id, ""])));
 
 export const DEFAULT_SETTINGS = Object.freeze({
   routeMode: "byok",
@@ -78,8 +78,8 @@ function normalizeModelId(value, fallback) {
     return fallback;
   }
 
-  if (!/^[A-Za-z0-9._:/-]+$/.test(model)) {
-    throw new Error("Model IDs may use letters, numbers, periods, underscores, colons, slashes, and hyphens only.");
+  if (!/^[A-Za-z0-9._:/@+-]+$/.test(model)) {
+    throw new Error("Model IDs may use letters, numbers, periods, underscores, colons, slashes, @, plus signs, and hyphens only.");
   }
 
   return model;
@@ -163,12 +163,7 @@ function normalizeSettings(rawSettings) {
   return {
     routeMode: isRouteMode(raw.routeMode) ? raw.routeMode : DEFAULT_SETTINGS.routeMode,
     provider,
-    models: {
-      openai: normalizeStoredModelId(rawModels.openai, DEFAULT_MODELS.openai),
-      anthropic: normalizeStoredModelId(rawModels.anthropic, DEFAULT_MODELS.anthropic),
-      deepseek: normalizeStoredModelId(rawModels.deepseek, DEFAULT_MODELS.deepseek),
-      custom: normalizeStoredModelId(rawModels.custom, DEFAULT_MODELS.custom)
-    },
+    models: Object.fromEntries(PROVIDERS.map(id => [id, normalizeStoredModelId(rawModels[id], "")])),
     baseUrls,
     backendEndpoint: normalizeStoredBackendEndpoint(raw.backendEndpoint),
     maxNodes: clampInteger(raw.maxNodes, 40, 500, DEFAULT_SETTINGS.maxNodes),
@@ -304,6 +299,12 @@ export async function getPublicSettings() {
   return toPublicSettings(settings, secrets);
 }
 
+export async function getProviderConnection(provider) {
+  if (!isProvider(provider)) throw new Error("Unsupported provider.");
+  const { settings, secrets } = await readStoredState();
+  return { provider, baseUrl: settings.baseUrls[provider], apiKey: secrets.providerKeys[provider] };
+}
+
 export async function getRuntimeSettings() {
   const { settings, secrets } = await readStoredState();
   return {
@@ -426,6 +427,10 @@ export async function saveSettingsPatch(patch) {
 
   if (Object.prototype.hasOwnProperty.call(patch, "maxOutputTokens")) {
     next.maxOutputTokens = clampInteger(patch.maxOutputTokens, 512, 8192, next.maxOutputTokens);
+  }
+
+  if (next.routeMode === "byok" && !next.models[next.provider]) {
+    throw new Error("Select a model or enter a model ID before saving BYOK settings.");
   }
 
   await chrome.storage.local.set({ [SETTINGS_KEY]: normalizeSettings(next) });

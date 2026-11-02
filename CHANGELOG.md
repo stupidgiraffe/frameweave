@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2
+
+- Added live model discovery after pasting a key and when reopening saved provider settings, with searchable suggestions, Refresh models, and manual model IDs.
+- Added OpenRouter, AIHubMix, Groq, Together AI, NVIDIA NIM, Ollama, and LM Studio presets with API URLs filled automatically.
+- Added AIHubMix catalog parsing, Together array catalogs, and Anthropic model pagination; filtered known non-text and explicitly incompatible model capabilities.
+- Require a non-empty model in both the BYOK UI and settings storage; new installations no longer silently choose a model. The backend route remains independent.
+- Cancel stale discovery results on provider/credential/URL changes; URL editing never sends keys automatically, and saved keys are not reused for discovery on a different origin without explicit re-entry.
+- Added regression coverage for automatic discovery, saved keys, provider switching, errors, catalog formats, URL editing, preset generation, and missing-model validation.
+
 ## 1.0.1
 
 - Added custom OpenAI-compatible BYOK with an editable API base URL, model ID, and optional key for local servers.

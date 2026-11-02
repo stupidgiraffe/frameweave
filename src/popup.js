@@ -2,6 +2,9 @@ import {
   clearBackendToken,
   clearProviderApiKey,
   getPublicSettings,
+  getProviderConnection,
+  normalizeProviderBaseUrl,
+  PROVIDER_PRESETS,
   requestBackendHostPermission,
   saveSettingsPatch,
   setBackendToken,
@@ -9,6 +12,7 @@ import {
 } from "./storage.js";
 import { listUserScriptSummaries } from "./userscriptStore.js";
 import { getUserScriptsAvailability } from "./userscriptRuntime.js";
+import { fetchProviderModels } from "./providerModels.js";
 
 const elements = {
   settingsForm: document.querySelector("#settings-form"),
@@ -18,6 +22,9 @@ const elements = {
   provider: document.querySelector("#provider"),
   providerBaseUrl: document.querySelector("#provider-base-url"),
   model: document.querySelector("#model"),
+  providerModels: document.querySelector("#provider-models"),
+  refreshModels: document.querySelector("#refresh-models"),
+  modelStatus: document.querySelector("#model-status"),
   apiKey: document.querySelector("#api-key"),
   providerKeyState: document.querySelector("#provider-key-state"),
   clearProviderKey: document.querySelector("#clear-provider-key"),
@@ -53,6 +60,82 @@ let selectedElement = null;
 let previewActive = false;
 let persistableCss = false;
 let busy = false;
+let modelRequest = 0;
+let modelTimer = null;
+let modelController = null;
+let modelsLoading = false;
+
+elements.provider.replaceChildren(...Object.entries(PROVIDER_PRESETS).map(([id, preset]) => {
+  const option = document.createElement("option");
+  option.value = id;
+  option.textContent = preset.label;
+  return option;
+}));
+
+function cancelModelFetch() {
+  modelRequest += 1;
+  clearTimeout(modelTimer);
+  modelController?.abort();
+  modelController = null;
+  modelsLoading = false;
+}
+
+function scheduleModelFetch(delay = 400) {
+  cancelModelFetch();
+  elements.providerModels.replaceChildren();
+  refreshActionAvailability();
+  if (!publicSettings || selectedRoute() !== "byok") return;
+  const provider = elements.provider.value;
+  if (!elements.providerBaseUrl.value.trim() && !PROVIDER_PRESETS[provider]?.baseUrl) {
+    elements.modelStatus.textContent = "Enter your provider URL to load models, or enter a model ID manually.";
+    return;
+  }
+  if (!elements.apiKey.value.trim() && !publicSettings.providerKeyPresent[provider] && !PROVIDER_PRESETS[provider]?.keyOptional) {
+    elements.modelStatus.textContent = "Paste your API key to load current models. A model is required to save.";
+    return;
+  }
+  const request = modelRequest;
+  elements.modelStatus.textContent = "Preparing to fetch models…";
+  modelTimer = setTimeout(() => { void loadModels(request); }, delay);
+}
+
+async function loadModels(request) {
+  const provider = elements.provider.value;
+  const baseUrl = elements.providerBaseUrl.value;
+  const typedKey = elements.apiKey.value.trim();
+  const controller = new AbortController();
+  modelController = controller;
+  modelsLoading = true;
+  refreshActionAvailability();
+  elements.modelStatus.textContent = "Fetching current models…";
+  try {
+    const saved = await getProviderConnection(provider);
+    if (request !== modelRequest) return;
+    const destination = normalizeProviderBaseUrl(baseUrl, provider);
+    if (!typedKey && saved.apiKey && (!saved.baseUrl || new URL(destination).origin !== new URL(saved.baseUrl).origin)) {
+      throw new Error("Paste an API key for the new provider URL before fetching models. Saved keys are not sent to a different origin.");
+    }
+    const models = await fetchProviderModels({ provider, baseUrl, apiKey: typedKey || saved.apiKey, signal: controller.signal });
+    if (request !== modelRequest) return;
+    elements.providerModels.replaceChildren(...models.map(model => {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.label = model.name;
+      return option;
+    }));
+    elements.modelStatus.textContent = models.length
+      ? models.length + " text model(s) loaded. Choose from the model field or type an ID."
+      : "No compatible text models were listed. Check the key permissions or enter a model ID manually.";
+  } catch (error) {
+    if (request === modelRequest) elements.modelStatus.textContent = error.message || "Could not fetch models. Enter a model ID manually.";
+  } finally {
+    if (request === modelRequest) {
+      modelsLoading = false;
+      modelController = null;
+      refreshActionAvailability();
+    }
+  }
+}
 
 function selectedRoute() {
   const selected = Array.from(elements.routeMode).find((input) => input.checked);
@@ -84,6 +167,11 @@ function refreshActionAvailability() {
   elements.commitPreview.disabled = busy || !previewActive;
   elements.discardPreview.disabled = busy || !previewActive;
   elements.saveLayout.disabled = busy || !persistableCss;
+  const missingModel = selectedRoute() === "byok" && !elements.model.value.trim();
+  elements.save.disabled = busy || missingModel;
+  elements.preview.disabled = busy || missingModel;
+  elements.apply.disabled = busy || missingModel;
+  elements.refreshModels.disabled = busy || modelsLoading;
 }
 
 function setBusy(nextBusy) {
@@ -95,6 +183,7 @@ function refreshVisibility() {
   const backend = selectedRoute() === "backend";
   elements.byokSettings.classList.toggle("is-hidden", backend);
   elements.backendSettings.classList.toggle("is-hidden", !backend);
+  refreshActionAvailability();
 }
 
 function refreshSecretState() {
@@ -104,7 +193,7 @@ function refreshSecretState() {
 
   elements.providerKeyState.textContent = keySaved
     ? "A key is saved for this provider. Leave the field blank to keep it."
-    : provider === "custom" ? "No key saved. A key is optional for servers that do not require authentication." : "No key is saved for this provider.";
+    : PROVIDER_PRESETS[provider]?.keyOptional ? "No key saved. A key is optional for servers that do not require authentication." : "No key is saved for this provider.";
   elements.backendTokenState.textContent = backendTokenSaved
     ? "A backend token is saved. Leave the field blank to keep it."
     : "No backend token is saved.";
@@ -172,6 +261,7 @@ function applySettingsToForm(settings) {
   elements.backendToken.value = "";
   refreshVisibility();
   refreshSecretState();
+  scheduleModelFetch(0);
 }
 
 async function reloadSettings() {
@@ -184,6 +274,10 @@ async function persistSettings(requestPermission) {
   const endpoint = elements.backendEndpoint.value;
   const apiKey = elements.apiKey.value.trim();
   const backendToken = elements.backendToken.value.trim();
+
+  if (routeMode === "byok" && !elements.model.value.trim()) {
+    throw new Error("Select a model or enter a model ID before saving BYOK settings.");
+  }
 
   if (routeMode === "backend") {
     if (!endpoint.trim()) {
@@ -200,9 +294,7 @@ async function persistSettings(requestPermission) {
   const saved = await saveSettingsPatch({
     routeMode,
     provider,
-    model: elements.model.value,
-    modelProvider: provider,
-    ...(routeMode === "byok" ? { baseUrl: elements.providerBaseUrl.value } : {}),
+    ...(routeMode === "byok" ? { model: elements.model.value, modelProvider: provider, baseUrl: elements.providerBaseUrl.value } : {}),
     backendEndpoint: endpoint,
     maxNodes: elements.maxNodes.value,
     maxDepth: elements.maxDepth.value
@@ -287,11 +379,30 @@ elements.provider.addEventListener("change", () => {
   elements.providerBaseUrl.value = publicSettings.baseUrls[elements.provider.value] || "";
   elements.apiKey.value = "";
   refreshSecretState();
+  scheduleModelFetch(0);
 });
 
 for (const input of elements.routeMode) {
-  input.addEventListener("change", refreshVisibility);
+  input.addEventListener("change", () => {
+    refreshVisibility();
+    scheduleModelFetch(0);
+  });
 }
+
+elements.apiKey.addEventListener("input", () => scheduleModelFetch());
+elements.apiKey.addEventListener("change", () => scheduleModelFetch(0));
+function providerUrlEdited() {
+  cancelModelFetch();
+  elements.providerModels.replaceChildren();
+  elements.modelStatus.textContent = "Provider URL changed. Choose Refresh models when the URL is complete.";
+  refreshActionAvailability();
+}
+elements.providerBaseUrl.addEventListener("input", providerUrlEdited);
+elements.providerBaseUrl.addEventListener("change", providerUrlEdited);
+elements.model.addEventListener("input", refreshActionAvailability);
+elements.model.addEventListener("change", refreshActionAvailability);
+elements.refreshModels.addEventListener("click", () => scheduleModelFetch(0));
+window.addEventListener("pagehide", cancelModelFetch);
 
 elements.clearProviderKey.addEventListener("click", () => {
   if (busy || !window.confirm("Remove the saved API key for this provider from this browser?")) {
