@@ -7,14 +7,14 @@ Frameweave is a local-first, bring-your-own-key browser workspace for two jobs t
 
 No hosted service is required for the open-source base. Provider keys, scripts, values, assets, backups, and layout telemetry remain in the browser's local extension storage unless the user explicitly selects the optional backend adapter.
 
-> Status: v1.0.0 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
+> Status: v1.0.1 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
 
 ## Why Frameweave
 
 Frameweave combines an AI-powered page-customization workspace with a serious, native userscript manager. It is built for people who want to reshape the web instead of merely browse it: describe a change, inspect the result, keep what works, and build a reusable library of scripts that travel with you.
 
 - **One extension, two kinds of power.** Turn a plain-English request into site CSS and page automation, then save a useful result as a site-scoped userscript.
-- **Your AI, your keys, your data.** Use your own OpenAI, Anthropic, or DeepSeek key directly from the extension. No required account, hosted service, or cloud copy of your scripts.
+- **Your AI, your keys, your data.** Use OpenAI, Anthropic, DeepSeek, or a custom OpenAI-compatible provider with your own URL and model ID. No required account, hosted service, or cloud copy of your scripts.
 - **Native userscript execution.** Scripts, dependencies, resources, stored values, updates, and GM-compatible APIs run through Chrome's User Scripts platform—not a fragile in-extension code runner.
 - **Inspectable before permanent.** Preview CSS first, then explicitly keep or discard it. AI-drafted userscripts open in the editor; they never silently run themselves.
 - **Built to grow with you.** Import existing scripts, load scripts from a URL, manage updates, export JSON backups, and control exactly when and where every script runs.
@@ -27,7 +27,7 @@ Frameweave needs Chrome 135+ for its **Run now** button: that feature launches a
 
 ### AI layout workspace
 
-- Direct BYOK adapters for OpenAI Responses, Anthropic Messages, and DeepSeek Chat.
+- Direct BYOK adapters for OpenAI Responses, Anthropic Messages, DeepSeek Chat, and custom OpenAI-compatible Chat Completions. All adapters have editable API base URLs.
 - A central adapter route: `byok` sends directly to the selected provider; `backend` posts to a configurable HTTPS endpoint for a future hosted tier.
 - Token-efficient DOM extraction: tags, stable IDs, structural classes, hierarchy, layout signals, and selected-element hints only. It excludes page text, image data, scripts, form values, and article payloads.
 - Strict response contract. Every layout adapter must return exactly:
@@ -80,6 +80,14 @@ Frameweave needs Chrome 135+ for its **Run now** button: that feature launches a
 6. Pin Frameweave. Configure a direct provider key in the popup, or open **Manage** to use the script library.
 
 Use dedicated, revocable API keys with spend limits. `chrome.storage.local` is browser storage, not a hardware-backed secret vault.
+
+### Use your own model provider
+
+In the popup, select **Direct BYOK → Custom OpenAI-compatible (Chat Completions)**. Paste the provider's **API base URL**, enter its exact **model ID**, add its API key if required, and choose **Save settings**. These settings apply to both layout generation and AI userscript drafting.
+
+Include the provider's API path, for example `https://your-provider.example/v1` or `https://openrouter.ai/api/v1`. A full URL ending in `/chat/completions` is also accepted. Local servers can use `http://localhost:11434/v1` or `http://127.0.0.1:1234/v1`; leave the key blank if the server does not require authentication. Remote URLs require HTTPS.
+
+URLs, models, and saved keys are kept separately for each provider choice. The three presets also accept a custom base URL for compatible proxies. The custom adapter expects Chat Completions with JSON mode (`response_format: json_object`); a provider using another protocol needs its matching adapter. This is separate from **Backend adapter**, which uses Frameweave's own request contract.
 
 ## Permission model
 

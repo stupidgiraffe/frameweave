@@ -3,19 +3,32 @@ const SECRETS_KEY = "frameweave.secrets.v1";
 const IMPACT_KEY = "frameweave.impact.v1";
 const PICKED_ELEMENT_PREFIX = "frameweave.picked-element.v1.";
 
-export const PROVIDERS = Object.freeze(["openai", "anthropic", "deepseek"]);
+export const PROVIDERS = Object.freeze(["openai", "anthropic", "deepseek", "custom"]);
 export const ROUTE_MODES = Object.freeze(["byok", "backend"]);
+
+export const DEFAULT_BASE_URLS = Object.freeze({
+  openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com/v1",
+  deepseek: "https://api.deepseek.com",
+  custom: ""
+});
+
+const PROVIDER_PATHS = Object.freeze({
+  openai: "/responses", anthropic: "/messages", deepseek: "/chat/completions", custom: "/chat/completions"
+});
 
 const DEFAULT_MODELS = Object.freeze({
   openai: "gpt-4.1-mini",
   anthropic: "claude-sonnet-4-5",
-  deepseek: "deepseek-chat"
+  deepseek: "deepseek-chat",
+  custom: ""
 });
 
 export const DEFAULT_SETTINGS = Object.freeze({
   routeMode: "byok",
   provider: "openai",
   models: DEFAULT_MODELS,
+  baseUrls: DEFAULT_BASE_URLS,
   backendEndpoint: "",
   maxNodes: 260,
   maxDepth: 8,
@@ -80,6 +93,32 @@ function normalizeStoredModelId(value, fallback) {
   }
 }
 
+export function normalizeProviderBaseUrl(value, provider) {
+  if (!isProvider(provider)) throw new Error("Unsupported provider.");
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return DEFAULT_BASE_URLS[provider];
+  if (raw.length > 2048) throw new Error("The provider URL is too long.");
+  let url;
+  try { url = new URL(raw); } catch { throw new Error("Enter a valid provider API base URL."); }
+  const loopback = url.hostname === "localhost" || url.hostname === "[::1]" || /^127\.\d+\.\d+\.\d+$/.test(url.hostname);
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
+    throw new Error("Provider URLs require HTTPS, or HTTP on localhost for local servers.");
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error("Provider URLs cannot contain credentials, a query, or a fragment. Use the API key field for credentials.");
+  }
+  url.pathname = url.pathname.replace(/\/+$/, "");
+  const suffix = PROVIDER_PATHS[provider];
+  if (url.pathname.endsWith(suffix)) url.pathname = url.pathname.slice(0, -suffix.length);
+  return url.toString().replace(/\/+$/, "");
+}
+
+export function providerEndpoint(provider, baseUrl) {
+  const base = normalizeProviderBaseUrl(baseUrl, provider);
+  if (!base) throw new Error("Enter your provider API base URL first.");
+  return base + PROVIDER_PATHS[provider];
+}
+
 export function normalizeBackendEndpoint(value) {
   const raw = asTrimmedString(value, 1024);
   if (!raw) {
@@ -114,6 +153,11 @@ function normalizeStoredBackendEndpoint(value) {
 function normalizeSettings(rawSettings) {
   const raw = isPlainObject(rawSettings) ? rawSettings : {};
   const rawModels = isPlainObject(raw.models) ? raw.models : {};
+  const rawBaseUrls = isPlainObject(raw.baseUrls) ? raw.baseUrls : {};
+  const baseUrls = Object.fromEntries(PROVIDERS.map((name) => {
+    try { return [name, normalizeProviderBaseUrl(rawBaseUrls[name], name)]; }
+    catch { return [name, DEFAULT_BASE_URLS[name]]; }
+  }));
   const provider = isProvider(raw.provider) ? raw.provider : DEFAULT_SETTINGS.provider;
 
   return {
@@ -122,8 +166,10 @@ function normalizeSettings(rawSettings) {
     models: {
       openai: normalizeStoredModelId(rawModels.openai, DEFAULT_MODELS.openai),
       anthropic: normalizeStoredModelId(rawModels.anthropic, DEFAULT_MODELS.anthropic),
-      deepseek: normalizeStoredModelId(rawModels.deepseek, DEFAULT_MODELS.deepseek)
+      deepseek: normalizeStoredModelId(rawModels.deepseek, DEFAULT_MODELS.deepseek),
+      custom: normalizeStoredModelId(rawModels.custom, DEFAULT_MODELS.custom)
     },
+    baseUrls,
     backendEndpoint: normalizeStoredBackendEndpoint(raw.backendEndpoint),
     maxNodes: clampInteger(raw.maxNodes, 40, 500, DEFAULT_SETTINGS.maxNodes),
     maxDepth: clampInteger(raw.maxDepth, 3, 16, DEFAULT_SETTINGS.maxDepth),
@@ -231,6 +277,7 @@ function toPublicSettings(settings, secrets) {
     routeMode: settings.routeMode,
     provider: settings.provider,
     models: { ...settings.models },
+    baseUrls: { ...settings.baseUrls },
     backendEndpoint: settings.backendEndpoint,
     maxNodes: settings.maxNodes,
     maxDepth: settings.maxDepth,
@@ -262,6 +309,7 @@ export async function getRuntimeSettings() {
   return {
     ...settings,
     model: settings.models[settings.provider],
+    baseUrl: settings.baseUrls[settings.provider],
     apiKey: secrets.providerKeys[settings.provider],
     backendToken: secrets.backendToken
   };
@@ -334,7 +382,8 @@ export async function saveSettingsPatch(patch) {
   const { settings, secrets } = await readStoredState();
   const next = {
     ...settings,
-    models: { ...settings.models }
+    models: { ...settings.models },
+    baseUrls: { ...settings.baseUrls }
   };
 
   if (Object.prototype.hasOwnProperty.call(patch, "routeMode")) {
@@ -360,6 +409,13 @@ export async function saveSettingsPatch(patch) {
     next.backendEndpoint = normalizeBackendEndpoint(patch.backendEndpoint);
   }
 
+  if (Object.prototype.hasOwnProperty.call(patch, "baseUrl")) {
+    next.baseUrls[next.provider] = normalizeProviderBaseUrl(patch.baseUrl, next.provider);
+    if (next.provider === "custom" && !next.baseUrls.custom) {
+      throw new Error("Enter your provider API base URL first.");
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(patch, "maxNodes")) {
     next.maxNodes = clampInteger(patch.maxNodes, 40, 500, next.maxNodes);
   }
@@ -382,8 +438,8 @@ export async function setProviderApiKey(provider, apiKey) {
   }
 
   const nextKey = asTrimmedString(apiKey, 4096);
-  if (nextKey.length < 8) {
-    throw new Error("The provider API key is too short.");
+  if (!nextKey || /[\r\n]/.test(nextKey)) {
+    throw new Error("Enter a non-empty provider API key on one line.");
   }
 
   const { secrets } = await readStoredState();

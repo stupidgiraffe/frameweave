@@ -16,6 +16,7 @@ const elements = {
   byokSettings: document.querySelector("#byok-settings"),
   backendSettings: document.querySelector("#backend-settings"),
   provider: document.querySelector("#provider"),
+  providerBaseUrl: document.querySelector("#provider-base-url"),
   model: document.querySelector("#model"),
   apiKey: document.querySelector("#api-key"),
   providerKeyState: document.querySelector("#provider-key-state"),
@@ -103,7 +104,7 @@ function refreshSecretState() {
 
   elements.providerKeyState.textContent = keySaved
     ? "A key is saved for this provider. Leave the field blank to keep it."
-    : "No key is saved for this provider.";
+    : provider === "custom" ? "No key saved. A key is optional for servers that do not require authentication." : "No key is saved for this provider.";
   elements.backendTokenState.textContent = backendTokenSaved
     ? "A backend token is saved. Leave the field blank to keep it."
     : "No backend token is saved.";
@@ -163,6 +164,7 @@ function applySettingsToForm(settings) {
   }
   elements.provider.value = settings.provider;
   elements.model.value = settings.models[settings.provider];
+  elements.providerBaseUrl.value = settings.baseUrls[settings.provider];
   elements.backendEndpoint.value = settings.backendEndpoint;
   elements.maxNodes.value = String(settings.maxNodes);
   elements.maxDepth.value = String(settings.maxDepth);
@@ -200,6 +202,7 @@ async function persistSettings(requestPermission) {
     provider,
     model: elements.model.value,
     modelProvider: provider,
+    ...(routeMode === "byok" ? { baseUrl: elements.providerBaseUrl.value } : {}),
     backendEndpoint: endpoint,
     maxNodes: elements.maxNodes.value,
     maxDepth: elements.maxDepth.value
@@ -216,6 +219,7 @@ async function persistSettings(requestPermission) {
   elements.backendToken.value = "";
   publicSettings = await getPublicSettings();
   elements.model.value = publicSettings.models[provider] || saved.models[provider];
+  elements.providerBaseUrl.value = publicSettings.baseUrls[provider];
   refreshSecretState();
   return publicSettings;
 }
@@ -280,6 +284,7 @@ elements.provider.addEventListener("change", () => {
     return;
   }
   elements.model.value = publicSettings.models[elements.provider.value] || "";
+  elements.providerBaseUrl.value = publicSettings.baseUrls[elements.provider.value] || "";
   elements.apiKey.value = "";
   refreshSecretState();
 });

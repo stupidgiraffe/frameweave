@@ -30,6 +30,7 @@ flowchart TD
 `src/background.js` owns the long-lived popup protocol and `routeGeneration()`. The route decision is intentionally isolated:
 
 - `byok` calls `generateLayoutPayload()` with a provider key from `chrome.storage.local`.
+- Each direct provider keeps its own API base URL, model ID, and key. The custom provider uses OpenAI-compatible Chat Completions for both layout and userscript generation. Endpoint normalization is shared with settings validation; the backend adapter retains its separate contract.
 - `backend` calls the configured HTTPS endpoint using the same request/response contract.
 
 `src/aiClient.js` validates the exact outer JSON shape before deployment. `src/injector.js` parses the inner `AutomationProgram`, rejects unsupported fields, and passes only data to its static execution function.
