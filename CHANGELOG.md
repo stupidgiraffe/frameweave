@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.4
+
+- Separate keyword search from the selected model ID; keep filtering active across delayed responses and refreshes.
+- Replace clipped native options with touch-friendly buttons showing wrapped names and IDs, live result counts, and an empty state.
+- Add a Chromium mobile-width interaction and overflow check to CI.
+
 ## 1.0.3
 
 - Replaced the native datalist with a visible, searchable model list that works with mobile browsers.

@@ -18,6 +18,7 @@ async function popup(t, values = {}) {
     value = ""; textContent = ""; checked = false; disabled = false; children = [];
     classList = { toggle() {} };
     replaceChildren(...children) { this.children = children; }
+    setAttribute(name, value) { this[name] = value; }
     focus() {}
   }
   const html = fs.readFileSync(new URL("../popup.html", import.meta.url), "utf8");
@@ -151,8 +152,7 @@ test("visible model list selects an ID and clearing a key keeps the popup and pr
   });
   await waitFor(() => /loaded/i.test(elements["model-status"].textContent));
   globalThis.window.confirm = () => { throw new Error("Native confirmation closes the popup"); };
-  elements["provider-models"].value = "vendor/model";
-  elements["provider-models"].dispatchEvent(new Event("change"));
+  elements["provider-models"].children[0].dispatchEvent(new Event("click"));
   assert.equal(elements.model.value, "vendor/model");
   elements["clear-provider-key"].dispatchEvent(new Event("click"));
   await waitFor(() => elements.status.textContent === "Saved provider key removed.");
@@ -160,4 +160,31 @@ test("visible model list selects an ID and clearing a key keeps the popup and pr
   assert.equal(elements.provider.value, "openrouter");
   assert.equal(elements.model.value, "vendor/model");
   assert.equal(elements["api-key"].value, "");
+});
+
+test("keyword filtering survives a late catalog response and never becomes the selected model", async (t) => {
+  let finish;
+  t.mock.method(globalThis, "fetch", () => new Promise(resolve => { finish = resolve; }));
+  const { elements } = await popup(t, {
+    "frameweave.settings.v1": { provider: "openrouter", models: { openrouter: "chosen-model" } },
+    "frameweave.secrets.v1": { providerKeys: { openrouter: "saved-key" } }
+  });
+  await waitFor(() => Boolean(finish));
+  assert.ok(elements["model-search"], "Search must have its own field");
+  elements["model-search"].value = "FrEe";
+  elements["model-search"].dispatchEvent(new Event("input"));
+  finish(new Response(JSON.stringify({ data: [{ id: "vendor/paid", name: "Paid" }, { id: "vendor/model:free", name: "Long Model" }] })));
+  await waitFor(() => /loaded/i.test(elements["model-status"].textContent));
+  assert.deepEqual(elements["provider-models"].children.map(row => row.value), ["vendor/model:free"]);
+  assert.equal(elements.model.value, "chosen-model");
+  elements["provider-models"].children[0].dispatchEvent(new Event("click"));
+  assert.equal(elements.model.value, "vendor/model:free");
+  assert.equal(elements["model-search"].value, "FrEe");
+  elements["model-search"].value = "zzzz";
+  elements["model-search"].dispatchEvent(new Event("input"));
+  assert.equal(elements["provider-models"].children.length, 0);
+  assert.match(elements["model-results-status"].textContent, /no models match/i);
+  elements["model-search"].value = "";
+  elements["model-search"].dispatchEvent(new Event("input"));
+  assert.equal(elements["provider-models"].children.length, 2);
 });

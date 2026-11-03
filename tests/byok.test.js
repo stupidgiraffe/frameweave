@@ -177,6 +177,7 @@ test("popup lets users save a custom provider and restores its URL when switchin
     disabled = false;
     classList = { toggle() {} };
     replaceChildren() {}
+    setAttribute() {}
   }
   const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(([, id]) => ["#" + id, new Element()]));
   const routes = ["byok", "backend"].map(value => Object.assign(new Element(), { value }));
