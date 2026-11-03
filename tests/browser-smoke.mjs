@@ -35,14 +35,18 @@ try {
     };
   });
   let pending;
-  await page.route("https://openrouter.ai/api/v1/models", route => { pending = route; });
+  await page.route("https://openrouter.ai/api/v1/models", async route => {
+    if (route.request().method() === "OPTIONS") {
+      await route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization,accept", "access-control-allow-methods": "GET" } });
+    } else pending = route;
+  });
   await page.goto(`http://127.0.0.1:${server.address().port}/popup.html`);
   await page.waitForFunction(() => document.querySelector("#status").textContent.startsWith("Ready."));
   for (let i = 0; i < 100 && !pending; i++) await new Promise(resolve => setTimeout(resolve, 20));
   assert.ok(pending, "Model request did not start");
   await page.locator("#model-search").fill("FrEe");
   const longId = "vendor/" + "long-model-".repeat(8) + ":free";
-  await pending.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [
+  await pending.fulfill({ headers: { "access-control-allow-origin": "*" }, contentType: "application/json", body: JSON.stringify({ data: [
     { id: "vendor/paid", name: "Paid model" },
     { id: "vendor/short:free", name: "Free model" },
     { id: longId, name: "A very long descriptive model name with many words that must wrap across multiple lines on a small phone" }
