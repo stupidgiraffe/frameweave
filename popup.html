@@ -58,13 +58,15 @@
           </div>
           <p id="provider-key-state" class="field-hint"></p>
 
-          <label for="model">Model ID — search or enter manually</label>
+          <label for="model-search">Search models</label>
+          <input id="model-search" type="search" autocomplete="off" spellcheck="false" placeholder="Filter by keyword, e.g. free or Claude" aria-controls="provider-models">
+          <label for="model">Selected model ID</label>
           <div class="secret-row">
-            <input id="model" name="model" type="text" maxlength="128" autocomplete="off" spellcheck="false" placeholder="Search models or enter an ID" aria-describedby="model-status" required>
+            <input id="model" name="model" type="text" maxlength="128" autocomplete="off" spellcheck="false" placeholder="Select a model below or enter an exact ID" aria-describedby="model-status" required>
             <button id="refresh-models" class="quiet-button" type="button">Refresh models</button>
           </div>
-          <label for="provider-models">Available models</label>
-          <select id="provider-models" size="5" aria-describedby="model-status"></select>
+          <div id="provider-models" class="model-choices" role="group" aria-label="Available models"></div>
+          <p id="model-results-status" class="field-hint" role="status" aria-live="polite"></p>
           <p id="model-status" class="field-hint" role="status" aria-live="polite">Paste your API key to load current models. A model is required to save.</p>
         </section>
 

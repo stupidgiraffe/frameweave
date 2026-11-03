@@ -22,6 +22,8 @@ const elements = {
   provider: document.querySelector("#provider"),
   providerBaseUrl: document.querySelector("#provider-base-url"),
   model: document.querySelector("#model"),
+  modelSearch: document.querySelector("#model-search"),
+  modelResultsStatus: document.querySelector("#model-results-status"),
   providerModels: document.querySelector("#provider-models"),
   refreshModels: document.querySelector("#refresh-models"),
   modelStatus: document.querySelector("#model-status"),
@@ -66,16 +68,32 @@ let modelController = null;
 let modelsLoading = false;
 let availableModels = [];
 
-function renderModels(query = "") {
-  const search = query.trim().toLowerCase();
-  const matching = availableModels.filter(model => !search || model.id.toLowerCase().includes(search) || model.name.toLowerCase().includes(search));
+function renderModels() {
+  const words = elements.modelSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const matching = availableModels.filter(model => words.every(word => (model.id + " " + model.name).toLowerCase().includes(word)));
   elements.providerModels.replaceChildren(...matching.map(model => {
-    const option = document.createElement("option");
-    option.value = model.id;
-    option.textContent = model.name === model.id ? model.id : model.name + " — " + model.id;
-    return option;
+    const row = document.createElement("button");
+    row.type = "button";
+    row.value = model.id;
+    row.className = "model-choice";
+    row.setAttribute("aria-pressed", String(elements.model.value === model.id));
+    const name = document.createElement("span");
+    name.className = "model-choice-name";
+    name.textContent = model.name;
+    const id = document.createElement("span");
+    id.className = "model-choice-id";
+    id.textContent = model.id;
+    row.replaceChildren(name, id);
+    row.addEventListener("click", () => {
+      elements.model.value = model.id;
+      renderModels();
+      refreshActionAvailability();
+    });
+    return row;
   }));
-  elements.providerModels.selectedIndex = -1;
+  elements.modelResultsStatus.textContent = matching.length
+    ? matching.length + " of " + availableModels.length + " models shown"
+    : words.length ? "No models match your search." : "No models loaded yet.";
 }
 
 elements.provider.replaceChildren(...Object.entries(PROVIDER_PRESETS).map(([id, preset]) => {
@@ -96,7 +114,7 @@ function cancelModelFetch() {
 function scheduleModelFetch(delay = 400) {
   cancelModelFetch();
   availableModels = [];
-  elements.providerModels.replaceChildren();
+  renderModels();
   refreshActionAvailability();
   if (!publicSettings || selectedRoute() !== "byok") return;
   const provider = elements.provider.value;
@@ -404,18 +422,15 @@ elements.apiKey.addEventListener("change", () => scheduleModelFetch(0));
 function providerUrlEdited() {
   cancelModelFetch();
   availableModels = [];
-  elements.providerModels.replaceChildren();
+  renderModels();
   elements.modelStatus.textContent = "Provider URL changed. Choose Refresh models when the URL is complete.";
   refreshActionAvailability();
 }
 elements.providerBaseUrl.addEventListener("input", providerUrlEdited);
 elements.providerBaseUrl.addEventListener("change", providerUrlEdited);
-elements.model.addEventListener("input", () => { renderModels(elements.model.value); refreshActionAvailability(); });
+elements.modelSearch.addEventListener("input", renderModels);
+elements.model.addEventListener("input", () => { renderModels(); refreshActionAvailability(); });
 elements.model.addEventListener("change", refreshActionAvailability);
-elements.providerModels.addEventListener("change", () => {
-  if (elements.providerModels.value) elements.model.value = elements.providerModels.value;
-  refreshActionAvailability();
-});
 elements.refreshModels.addEventListener("click", () => scheduleModelFetch(0));
 window.addEventListener("pagehide", cancelModelFetch);
 

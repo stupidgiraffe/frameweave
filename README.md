@@ -7,7 +7,7 @@ Frameweave is a local-first, bring-your-own-key browser workspace for two jobs t
 
 No hosted service is required for the open-source base. Provider keys, scripts, values, assets, backups, and layout telemetry remain in the browser's local extension storage unless the user explicitly selects the optional backend adapter.
 
-> Status: v1.0.3 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
+> Status: v1.0.4 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
 
 ## Why Frameweave
 
@@ -84,7 +84,7 @@ Use dedicated, revocable API keys with spend limits. `chrome.storage.local` is b
 
 ### Use your own model provider
 
-In the popup, select **Direct BYOK**, choose a provider, and paste its API key. Frameweave fills the API URL and loads the provider's current model list. Select a model from the visible list, or type in the **Model ID** field to filter the list or enter an ID. Choose **Save settings** after selecting a model. An empty model blocks saving and generation; new installations have no preselected model. These settings apply to both layout generation and AI userscript drafting.
+In the popup, select **Direct BYOK**, choose a provider, and paste its API key. Frameweave fills the API URL and loads the provider's current model list. Type a keyword in **Search models** to filter immediately. Tap a wrapped model row to choose it; **Selected model ID** also accepts an exact manual ID. Search never changes the selected ID. Choose **Save settings** after selecting a model. An empty model blocks saving and generation; new installations have no preselected model. These settings apply to both layout generation and AI userscript drafting.
 
 | Preset | Default API base URL |
 | --- | --- |
