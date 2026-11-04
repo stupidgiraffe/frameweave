@@ -8,6 +8,11 @@ function tokens(value) {
 function normalizeModels(body, preset) {
   const entries = Array.isArray(body) ? body : body && body.data;
   if (!Array.isArray(entries)) throw new Error("The provider did not return a supported model list. Enter a model ID manually.");
+  const [endpointLabel, endpointPath] = {
+    chat: ["chat_completions", "/chat/completions"],
+    responses: ["responses", "/responses"],
+    anthropic: ["claude_api", "/messages"]
+  }[preset.api];
   const models = new Map();
   for (const model of entries.slice(0, 10000)) {
     if (!model || typeof model !== "object" || model.active === false) continue;
@@ -18,8 +23,9 @@ function normalizeModels(body, preset) {
     const types = tokens(model.types || model.type);
     if (types.length && types.some(type => /embedding|rerank|image|video|speech|audio|moderation|^tts$|^stt$/.test(type)) && !types.includes("llm") && !types.includes("chat")) continue;
     const endpoints = tokens(model.endpoints);
-    const expected = { chat: "chat_completions", responses: "responses", anthropic: "claude_api" }[preset.api];
-    if (endpoints.length && !endpoints.includes(expected)) continue;
+    // Catalogs can advertise protocol labels or versioned HTTP paths.
+    if (endpoints.length && !endpoints.some(endpoint => endpoint === endpointLabel ||
+        (endpoint.startsWith("/") && endpoint.endsWith(endpointPath)))) continue;
     if (/(^|[/_-])(embedding|embeddings|rerank|whisper|tts|dall-e|moderation|transcribe|transcription|realtime|audio|image|sora)([/_.:-]|$)/i.test(id)) continue;
     const name = model.name || model.display_name || model.model_name || id;
     models.set(id, { id, name: typeof name === "string" ? name.slice(0, 180) : id });

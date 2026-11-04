@@ -40,9 +40,10 @@ test("OpenRouter models are fetched with the typed key and normalized for a text
     assert.equal(options.headers.Authorization, "Bearer typed-key");
     assert.equal(options.redirect, "error");
     return new Response(JSON.stringify({ data: [
-      { id: "vendor/z-model:free", name: "Z Model", architecture: { output_modalities: ["text"] } },
+      { id: "vendor/z-model:free", name: "Z Model", architecture: { output_modalities: ["text"] }, endpoints: ["/api/v1/chat/completions", "/api/v1/responses"] },
       { id: "vendor/a-model", name: "A Model", architecture: { output_modalities: ["text"] } },
       { id: "vendor/image", architecture: { output_modalities: ["image"] } },
+      { id: "vendor/batch-only", endpoints: ["/api/v1/batches"] },
       { id: "vendor/z-model:free", name: "Duplicate" },
       { id: "" }
     ] }));

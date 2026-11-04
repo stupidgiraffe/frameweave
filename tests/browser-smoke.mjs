@@ -48,8 +48,9 @@ try {
   const longId = "vendor/" + "long-model-".repeat(8) + ":free";
   await pending.fulfill({ headers: { "access-control-allow-origin": "*" }, contentType: "application/json", body: JSON.stringify({ data: [
     { id: "vendor/paid", name: "Paid model" },
-    { id: "vendor/short:free", name: "Free model" },
-    { id: longId, name: "A very long descriptive model name with many words that must wrap across multiple lines on a small phone" }
+    { id: "vendor/short:free", name: "Free model", endpoints: ["/api/v1/chat/completions"] },
+    { id: "vendor/batch:free", name: "Batch only", endpoints: ["/api/v1/batches"] },
+    { id: longId, endpoints: ["/api/v1/chat/completions"], name: "A very long descriptive model name with many words that must wrap across multiple lines on a small phone" }
   ] }) });
   await page.waitForFunction(() => document.querySelectorAll(".model-choice").length === 2);
   assert.equal(await page.locator("#model").inputValue(), "saved-model");

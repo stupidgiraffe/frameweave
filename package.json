@@ -1,6 +1,6 @@
 {
   "name": "frameweave",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "description": "Local-first BYOK AI workspace for Chromium layouts and userscripts.",
   "type": "module",

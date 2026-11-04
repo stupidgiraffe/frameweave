@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.5
+
+- Accept versioned endpoint paths in model catalogs. OpenRouter chat models appear in the picker and batch-only entries stay excluded.
+
 ## 1.0.4
 
 - Separate keyword search from the selected model ID; keep filtering active across delayed responses and refreshes.
