@@ -7,7 +7,7 @@ Frameweave is a local-first, bring-your-own-key browser workspace for two jobs t
 
 No hosted service is required for the open-source base. Provider keys, scripts, values, assets, backups, and layout telemetry remain in the browser's local extension storage unless the user explicitly selects the optional backend adapter.
 
-> Status: v1.0.5 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
+> Status: v1.0.6 MV3 release. The repository has static checks and contract tests; run the browser acceptance checklist before publishing a Chrome Web Store listing.
 
 ## Why Frameweave
 
@@ -28,7 +28,7 @@ Frameweave needs Chrome 135+ for its **Run now** button: that feature launches a
 ### AI layout workspace
 
 - Direct BYOK adapters for OpenAI Responses, Anthropic Messages, DeepSeek Chat, and custom OpenAI-compatible Chat Completions. All adapters have editable API base URLs.
-- Live model discovery with a searchable visible model list, automatic fetching after key entry and on reopening saved settings, and a manual Refresh button. Known non-text models and explicitly incompatible API capabilities are filtered; manual IDs remain available for private or unlisted models.
+- Live model discovery with a searchable visible model list, automatic fetching after key entry and an on-demand chooser that stays collapsed when reopening saved settings, and a manual Refresh button. Known non-text models and explicitly incompatible API capabilities are filtered; manual IDs remain available for private or unlisted models.
 - A central adapter route: `byok` sends directly to the selected provider; `backend` posts to a configurable HTTPS endpoint for a future hosted tier.
 - Token-efficient DOM extraction: tags, stable IDs, structural classes, hierarchy, layout signals, and selected-element hints only. It excludes page text, image data, scripts, form values, and article payloads.
 - Strict response contract. Every layout adapter must return exactly:
@@ -42,6 +42,8 @@ Frameweave needs Chrome 135+ for its **Run now** button: that feature launches a
 
 `javascript` is a JSON-serialized declarative `AutomationProgram`, not arbitrary model-generated source. Frameweave validates it, injects CSS with `chrome.scripting.insertCSS()`, and runs the validated program through a static interpreter with `chrome.scripting.executeScript()`.
 
+- Explicit target-tab selection for popup and mobile full-tab extension views. Touch element picking includes an on-page cancel control.
+- Generation runs independently of the popup, with progress and results restored on reopen. Keep the browser running; OS termination can still interrupt a request. If the target navigates, the generated plan is retained for explicit application on the original URL.
 - Element picking with open-shadow-root selector paths.
 - Preview → keep/discard lifecycle. Preview injects CSS only; automation executes only on **Keep preview**.
 - **Save current CSS as userscript** converts the generated CSS into a persistent, site-scoped local userscript.

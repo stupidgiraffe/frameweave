@@ -22,6 +22,15 @@ const elements = {
   provider: document.querySelector("#provider"),
   providerBaseUrl: document.querySelector("#provider-base-url"),
   model: document.querySelector("#model"),
+  modelChooser: document.querySelector("#model-chooser"),
+  selectedModelLabel: document.querySelector("#selected-model-label"),
+  changeModel: document.querySelector("#change-model"),
+  manualModel: document.querySelector("#manual-model"),
+  useModelId: document.querySelector("#use-model-id"),
+  pageTab: document.querySelector("#page-tab"),
+  refreshPages: document.querySelector("#refresh-pages"),
+  cancelGeneration: document.querySelector("#cancel-generation"),
+  applySavedResult: document.querySelector("#apply-saved-result"),
   modelSearch: document.querySelector("#model-search"),
   modelResultsStatus: document.querySelector("#model-results-status"),
   providerModels: document.querySelector("#provider-models"),
@@ -67,6 +76,30 @@ let modelTimer = null;
 let modelController = null;
 let modelsLoading = false;
 let availableModels = [];
+let chooserOpen = false;
+let targetTabId = null;
+let remoteBusy = false;
+let canCancel = false;
+
+function renderModelSummary() {
+  const id = elements.model.value.trim();
+  const name = availableModels.find(model => model.id === id)?.name;
+  elements.selectedModelLabel.textContent = name && name !== id ? name + " · " + id : id || "No model selected";
+  elements.changeModel.textContent = chooserOpen ? "Done" : id ? "Change model" : "Choose model";
+}
+
+function setChooserOpen(open) {
+  chooserOpen = open;
+  elements.modelChooser.classList.toggle("is-hidden", !open);
+  elements.changeModel.setAttribute("aria-expanded", String(open));
+  renderModelSummary();
+}
+
+function openModelChooser() {
+  setChooserOpen(true);
+  if (!availableModels.length && !modelsLoading) scheduleModelFetch(0);
+  elements.modelSearch.focus();
+}
 
 function renderModels() {
   const words = elements.modelSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -87,10 +120,12 @@ function renderModels() {
     row.addEventListener("click", () => {
       elements.model.value = model.id;
       renderModels();
+      setChooserOpen(false);
       refreshActionAvailability();
     });
     return row;
   }));
+  renderModelSummary();
   elements.modelResultsStatus.textContent = matching.length
     ? matching.length + " of " + availableModels.length + " models shown"
     : words.length ? "No models match your search." : "No models loaded yet.";
@@ -200,6 +235,13 @@ function refreshActionAvailability() {
   elements.preview.disabled = busy || missingModel;
   elements.apply.disabled = busy || missingModel;
   elements.refreshModels.disabled = busy || modelsLoading;
+  elements.pageTab.disabled = busy;
+  elements.cancelGeneration.classList.toggle("is-hidden", !(remoteBusy && canCancel));
+  elements.changeModel.disabled = busy;
+  elements.useModelId.disabled = busy;
+  const noPage = !Number.isInteger(targetTabId);
+  for (const button of [elements.inspect, elements.preview, elements.apply, elements.pickElement, elements.removeCss]) button.disabled ||= noPage;
+  elements.applySavedResult.disabled = busy || noPage;
 }
 
 function setBusy(nextBusy) {
@@ -289,7 +331,10 @@ function applySettingsToForm(settings) {
   elements.backendToken.value = "";
   refreshVisibility();
   refreshSecretState();
-  scheduleModelFetch(0);
+  cancelModelFetch();
+  availableModels = [];
+  setChooserOpen(false);
+  renderModels();
 }
 
 async function reloadSettings() {
@@ -346,7 +391,7 @@ async function persistSettings(requestPermission) {
 
 function post(message) {
   try {
-    port.postMessage(message);
+    port.postMessage({ ...message, ...(Number.isInteger(targetTabId) ? { tabId: targetTabId } : {}) });
   } catch {
     setBusy(false);
     setStatus("The extension background worker is unavailable. Reopen the popup and try again.", "error");
@@ -407,6 +452,8 @@ elements.provider.addEventListener("change", () => {
   elements.providerBaseUrl.value = publicSettings.baseUrls[elements.provider.value] || "";
   elements.apiKey.value = "";
   refreshSecretState();
+  setChooserOpen(false);
+  elements.modelSearch.value = "";
   scheduleModelFetch(0);
 });
 
@@ -417,8 +464,8 @@ for (const input of elements.routeMode) {
   });
 }
 
-elements.apiKey.addEventListener("input", () => scheduleModelFetch());
-elements.apiKey.addEventListener("change", () => scheduleModelFetch(0));
+elements.apiKey.addEventListener("input", () => { if (elements.apiKey.value.trim()) setChooserOpen(true); scheduleModelFetch(); });
+elements.apiKey.addEventListener("change", () => { if (elements.apiKey.value.trim()) setChooserOpen(true); scheduleModelFetch(0); });
 function providerUrlEdited() {
   cancelModelFetch();
   availableModels = [];
@@ -432,7 +479,24 @@ elements.modelSearch.addEventListener("input", renderModels);
 elements.model.addEventListener("input", () => { renderModels(); refreshActionAvailability(); });
 elements.model.addEventListener("change", refreshActionAvailability);
 elements.refreshModels.addEventListener("click", () => scheduleModelFetch(0));
+elements.changeModel.addEventListener("click", () => chooserOpen ? setChooserOpen(false) : openModelChooser());
+elements.useModelId.addEventListener("click", () => {
+  if (!elements.model.value.trim()) { elements.model.focus(); return; }
+  setChooserOpen(false);
+  refreshActionAvailability();
+});
+elements.pageTab.addEventListener("change", () => {
+  targetTabId = elements.pageTab.value ? Number(elements.pageTab.value) : null;
+  post({ type: "get-active-state" });
+});
+elements.refreshPages.addEventListener("click", () => post({ type: "get-active-state" }));
+elements.cancelGeneration.addEventListener("click", () => post({ type: "cancel-generation" }));
+elements.applySavedResult.addEventListener("click", () => {
+  setBusy(true);
+  post({ type: "apply-saved-result" });
+});
 window.addEventListener("pagehide", cancelModelFetch);
+window.addEventListener("focus", () => { if (!busy || remoteBusy) post({ type: "get-active-state" }); });
 
 elements.clearProviderKey.addEventListener("click", () => {
   if (busy) {
@@ -533,26 +597,66 @@ elements.saveLayout.addEventListener("click", () => {
   post({ type: "save-layout-as-script" });
 });
 
-port.onMessage.addListener((message) => {
+function handleMessage(message, restoring = false) {
   if (!message || typeof message.type !== "string") {
     return;
   }
 
   if (message.type === "state") {
+    remoteBusy = true;
+    canCancel = message.phase === "generating" || message.phase === "extracting";
+    setBusy(true);
     setStatus(message.message || "Working...", "working");
     return;
   }
 
   if (message.type === "active-state") {
+    targetTabId = message.tabId ?? null;
+    elements.pageTab.replaceChildren(...[{ id: "", title: "Choose a web page" }, ...(message.pages || [])].map(page => {
+      const option = document.createElement("option");
+      option.value = String(page.id);
+      option.textContent = page.title + (page.url ? " · " + new URL(page.url).hostname : "");
+      return option;
+    }));
+    elements.pageTab.value = targetTabId === null ? "" : String(targetTabId);
     renderSelectedTarget(message.selectedElement);
     renderImpact(message.impact);
     renderPreviewState(message.deployment);
+    remoteBusy = Boolean(message.job?.busy);
+    elements.applySavedResult.classList.toggle("is-hidden", !message.job?.hasPending);
+    setBusy(remoteBusy);
+    if (message.job?.event) handleMessage(message.job.event, true);
+    else setStatus(targetTabId === null ? "Choose a target web page to enable the page actions." : "Ready. Describe the change for the selected page.", "idle");
     return;
   }
 
-  if (message.type === "picker.started") {
+  if (message.type === "generation.ready") {
+    remoteBusy = false;
+    elements.applySavedResult.classList.remove("is-hidden");
+    setStatus(message.message, "success");
     setBusy(false);
-    setStatus("Click a non-sensitive page element to target it. Press Esc to cancel.", "success");
+    return;
+  }
+
+  remoteBusy = false;
+  if (["apply.complete", "preview.complete"].includes(message.type)) elements.applySavedResult.classList.add("is-hidden");
+
+  if (message.type === "picker.selected") {
+    renderSelectedTarget(message.selectedElement);
+    setBusy(false);
+    setStatus("Target selected. Describe the change you want.", "success");
+    return;
+  }
+  if (message.type === "picker.cancelled") {
+    setBusy(false);
+    setStatus("Element selection cancelled.", "idle");
+    return;
+  }
+  if (message.type === "picker.started") {
+    if (restoring) { setStatus(selectedElement ? "Target selected. Describe the change you want." : "Ready. Describe a change or pick an element on the target page.", "idle"); return; }
+    setBusy(false);
+    setStatus("Tap an element on the target page, then reopen Frameweave. Use Cancel selection on the page to stop.", "success");
+    if (!restoring) void chrome.tabs?.getCurrent().then(tab => { if (!tab) window.close(); });
     return;
   }
 
@@ -566,7 +670,7 @@ port.onMessage.addListener((message) => {
   if (message.type === "inspect.complete") {
     const summary = message.summary || {};
     const truncation = summary.truncated ? " The map reached its configured limit." : "";
-    if (Object.prototype.hasOwnProperty.call(message, "selectedElement")) {
+    if (!restoring && Object.prototype.hasOwnProperty.call(message, "selectedElement")) {
       renderSelectedTarget(message.selectedElement);
     }
     setStatus(
@@ -579,9 +683,9 @@ port.onMessage.addListener((message) => {
 
   if (message.type === "preview.complete") {
     const deployment = message.deployment || {};
-    renderPreviewState({ mode: "preview", cssInjected: deployment.cssInjected });
+    if (!restoring) renderPreviewState({ mode: "preview", cssInjected: deployment.cssInjected });
     renderImpact(message.impact);
-    if (Object.prototype.hasOwnProperty.call(message, "selectedElement")) {
+    if (!restoring && Object.prototype.hasOwnProperty.call(message, "selectedElement")) {
       renderSelectedTarget(message.selectedElement);
     }
     const previewMessage = deployment.cssInjected
@@ -600,9 +704,9 @@ port.onMessage.addListener((message) => {
     const warning = Array.isArray(automation.errors) && automation.errors.length > 0
       ? " Some actions were skipped; reload the page if a change needs a full reset."
       : "";
-    renderPreviewState({ mode: "applied", cssInjected: deployment.cssInjected });
+    if (!restoring) renderPreviewState({ mode: "applied", cssInjected: deployment.cssInjected });
     renderImpact(message.impact);
-    if (Object.prototype.hasOwnProperty.call(message, "selectedElement")) {
+    if (!restoring && Object.prototype.hasOwnProperty.call(message, "selectedElement")) {
       renderSelectedTarget(message.selectedElement);
     }
     setStatus(cssMessage + "; " + automationMessage + "." + warning, "success");
@@ -612,7 +716,7 @@ port.onMessage.addListener((message) => {
 
   if (message.type === "preview.commit.complete") {
     const automation = message.deployment && message.deployment.automation || {};
-    renderPreviewState({ mode: "applied", cssInjected: message.deployment && message.deployment.cssInjected });
+    if (!restoring) renderPreviewState({ mode: "applied", cssInjected: message.deployment && message.deployment.cssInjected });
     renderImpact(message.impact);
     setStatus("Preview kept; " + (automation.applied || 0) + " automation action(s) applied.", "success");
     setBusy(false);
@@ -648,15 +752,18 @@ port.onMessage.addListener((message) => {
 
   if (message.type === "error") {
     const error = message.error || {};
+    if (error.code === "request_in_progress") { post({ type: "get-active-state" }); return; }
     setStatus(error.message || "The request failed.", "error");
     setBusy(false);
   }
-});
+}
+
+port.onMessage.addListener(handleMessage);
 
 port.onDisconnect.addListener(() => {
   if (busy) {
     setBusy(false);
-    setStatus("The popup connection closed before the operation completed.", "error");
+    setStatus("The connection closed. Reopen Frameweave to reconnect to the background operation.", "error");
   }
 });
 

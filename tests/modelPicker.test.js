@@ -16,7 +16,7 @@ async function popup(t, values = {}) {
   const previous = { chrome: globalThis.chrome, document: globalThis.document, window: globalThis.window };
   class Element extends EventTarget {
     value = ""; textContent = ""; checked = false; disabled = false; children = [];
-    classList = { toggle() {} };
+    classList = { toggle() {}, add() {}, remove() {} };
     replaceChildren(...children) { this.children = children; }
     setAttribute(name, value) { this[name] = value; }
     focus() {}
@@ -81,7 +81,7 @@ test("pasting a key automatically fetches selectable models without auto-selecti
   assert.equal(runtime.apiKey, "pasted-secret");
 });
 
-test("opening settings fetches using the saved key without displaying it", async (t) => {
+test("saved models stay collapsed until Change model explicitly fetches with the saved key", async (t) => {
   t.mock.method(globalThis, "fetch", async (url, options) => {
     assert.equal(url, "https://aihubmix.com/api/v1/models");
     assert.equal(options.headers.Authorization, "Bearer saved-secret");
@@ -91,7 +91,8 @@ test("opening settings fetches using the saved key without displaying it", async
     "frameweave.settings.v1": { provider: "aihubmix", models: { aihubmix: "existing-model" } },
     "frameweave.secrets.v1": { providerKeys: { aihubmix: "saved-secret" } }
   });
-  assert.ok(elements["model-status"], "Model loading status is missing");
+  assert.equal(elements["change-model"]["aria-expanded"], "false");
+  elements["change-model"].dispatchEvent(new Event("click"));
   await waitFor(() => /loaded/i.test(elements["model-status"].textContent));
   assert.equal(elements["api-key"].value, "");
   assert.equal(elements.model.value, "existing-model");
@@ -129,6 +130,7 @@ test("editing an unsaved URL cannot automatically send a saved key to a new orig
     "frameweave.settings.v1": { provider: "openrouter", models: { openrouter: "selected-model" } },
     "frameweave.secrets.v1": { providerKeys: { openrouter: "saved-secret" } }
   });
+  elements["change-model"].dispatchEvent(new Event("click"));
   await waitFor(() => /loaded/i.test(elements["model-status"].textContent));
   elements["provider-base-url"].value = "https://new-provider.example/v2";
   elements["provider-base-url"].dispatchEvent(new Event("input"));
@@ -150,6 +152,7 @@ test("visible model list selects an ID and clearing a key keeps the popup and pr
     "frameweave.settings.v1": { provider: "openrouter", models: { openrouter: "vendor/model" } },
     "frameweave.secrets.v1": { providerKeys: { openrouter: "saved-secret" } }
   });
+  elements["change-model"].dispatchEvent(new Event("click"));
   await waitFor(() => /loaded/i.test(elements["model-status"].textContent));
   globalThis.window.confirm = () => { throw new Error("Native confirmation closes the popup"); };
   elements["provider-models"].children[0].dispatchEvent(new Event("click"));
@@ -169,6 +172,8 @@ test("keyword filtering survives a late catalog response and never becomes the s
     "frameweave.settings.v1": { provider: "openrouter", models: { openrouter: "chosen-model" } },
     "frameweave.secrets.v1": { providerKeys: { openrouter: "saved-key" } }
   });
+  assert.equal(finish, undefined, "Opening a saved model must not fetch or open its list");
+  elements["change-model"].dispatchEvent(new Event("click"));
   await waitFor(() => Boolean(finish));
   assert.ok(elements["model-search"], "Search must have its own field");
   elements["model-search"].value = "FrEe";
@@ -179,6 +184,8 @@ test("keyword filtering survives a late catalog response and never becomes the s
   assert.equal(elements.model.value, "chosen-model");
   elements["provider-models"].children[0].dispatchEvent(new Event("click"));
   assert.equal(elements.model.value, "vendor/model:free");
+  assert.equal(elements["change-model"]["aria-expanded"], "false");
+  elements["change-model"].dispatchEvent(new Event("click"));
   assert.equal(elements["model-search"].value, "FrEe");
   elements["model-search"].value = "zzzz";
   elements["model-search"].dispatchEvent(new Event("input"));

@@ -42,6 +42,9 @@ try {
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/popup.html`);
   await page.waitForFunction(() => document.querySelector("#status").textContent.startsWith("Ready."));
+  assert.equal(await page.locator("#model-chooser").isVisible(), false);
+  assert.equal(pending, undefined, "A saved model must not trigger catalog loading on open");
+  await page.locator("#change-model").click();
   for (let i = 0; i < 100 && !pending; i++) await new Promise(resolve => setTimeout(resolve, 20));
   assert.ok(pending, "Model request did not start");
   await page.locator("#model-search").fill("FrEe");
@@ -57,6 +60,8 @@ try {
   await page.locator(".model-choice").filter({ hasText: longId }).click();
   assert.equal(await page.locator("#model").inputValue(), longId);
   assert.equal(await page.locator("#model-search").inputValue(), "FrEe");
+  assert.equal(await page.locator("#model-chooser").isVisible(), false);
+  await page.locator("#change-model").click();
   await page.locator("#model-search").fill("no-matching-model");
   assert.equal(await page.locator(".model-choice").count(), 0);
   assert.match(await page.locator("#model-results-status").textContent(), /no models match/i);

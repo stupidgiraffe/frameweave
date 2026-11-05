@@ -22,8 +22,11 @@ jobs:
       - run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
       - run: npx playwright install --with-deps chromium
       - run: node tests/browser-smoke.mjs
+      - run: node tests/extension-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: model-picker-phone-width
-          path: model-picker-phone-width.png
+          path: |
+            model-picker-phone-width.png
+            page-actions-phone-width.png
