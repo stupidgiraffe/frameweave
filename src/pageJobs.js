@@ -12,11 +12,15 @@ export function selectPageTab(tabs, requestedId) {
 /** A page owns its work. Popup ports only observe it. No credentials or prompt are persisted. */
 export function createPageJobs({ storage, emit = () => {}, heartbeat = () => {} }) {
   const running = new Map();
+  let generation = 0;
 
   async function get(tabId) {
     if (running.has(tabId)) return running.get(tabId).snapshot;
+    const readGeneration = generation;
     const key = JOB_PREFIX + tabId;
     const saved = (await storage.get(key))[key] || null;
+    if (readGeneration !== generation) return get(tabId);
+    if (running.has(tabId)) return running.get(tabId).snapshot;
     if (saved?.busy) {
       saved.busy = false;
       saved.event = { type: "error", error: { code: "job_interrupted", message: "Generation was interrupted because the browser stopped its background worker. You can retry the request." } };
@@ -29,6 +33,7 @@ export function createPageJobs({ storage, emit = () => {}, heartbeat = () => {} 
     if (running.has(tabId)) throw Object.assign(new Error("An operation is already running for this page."), { code: "request_in_progress" });
     const controller = new AbortController();
     const entry = { controller, snapshot: { busy: true, event: { type: "state", message: "Preparing the page…" } } };
+    generation += 1;
     running.set(tabId, entry);
     let writes = Promise.resolve();
     const report = (event, pending = entry.snapshot.pending || null) => {

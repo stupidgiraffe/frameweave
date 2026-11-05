@@ -61,3 +61,25 @@ test("explicit cancellation aborts only that page's job and releases its lock", 
   assert.equal((await jobs.get(4)).busy, false);
   assert.match((await jobs.get(4)).event.error.message, /cancel/i);
 });
+
+test("inspect and failed application preserve a generated plan until successful deployment", async () => {
+  const jobs = createPageJobs({ storage: memory() });
+  const pending = { payload: { css: "main{color:red}", javascript: "" }, identity: { url: "https://example.org" } };
+  await jobs.run(5, ({ report }) => report({ type: "generation.ready" }, pending));
+  await jobs.run(5, ({ report }) => report({ type: "inspect.complete" }));
+  assert.deepEqual((await jobs.get(5)).pending, pending);
+  await jobs.run(5, async () => { throw new Error("Page unavailable"); });
+  assert.deepEqual((await jobs.get(5)).pending, pending);
+  await jobs.run(5, ({ report }) => report({ type: "apply.complete" }, null));
+  assert.equal((await jobs.get(5)).pending, null);
+});
+
+test("completion observers can immediately start a follow-up operation", async () => {
+  const storage = memory();
+  let locked;
+  const jobs = createPageJobs({ storage, emit: (tabId, event) => {
+    if (event.type === "inspect.complete") locked = jobs.isRunning(tabId);
+  } });
+  await jobs.run(8, ({ report }) => report({ type: "inspect.complete" }));
+  assert.equal(locked, false);
+});

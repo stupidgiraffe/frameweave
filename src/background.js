@@ -75,7 +75,7 @@ function send(port, message) {
 }
 
 function safeError(error) {
-  if (error instanceof AIClientError || error instanceof InjectionError) {
+  if (error instanceof AIClientError || error instanceof InjectionError || error?.code === "request_in_progress") {
     return {
       code: error.code,
       message: error.message
@@ -356,13 +356,15 @@ async function sendActiveState(connection, requestedId) {
     || (requestedId == null && connection.tabId == null ? selectPageTab(tabs, savedTarget) : null);
   if (tab) await chrome.storage.session.set({ [targetKey]: tab.id });
   connection.tabId = tab?.id ?? null;
-  const [selectedElement, impact, deployment] = await Promise.all([
-    tab ? getPickedElement(tab.id) : null,
-    getImpactSummary(),
-    tab ? getDeploymentState(tab.id) : null
-  ]);
-  // Read the job last: progress/completion can arrive while the other state is loading.
-  let job = tab ? await jobs.get(tab.id) : null;
+  let selectedElement, impact, deployment, job, before;
+  do {
+    before = tab ? await jobs.get(tab.id) : null;
+    [selectedElement, impact, deployment] = await Promise.all([
+      tab ? getPickedElement(tab.id) : null, getImpactSummary(), tab ? getDeploymentState(tab.id) : null
+    ]);
+    job = tab ? await jobs.get(tab.id) : null;
+    // Retry if completion changed deployment while the snapshot was being read.
+  } while (before?.busy !== job?.busy || before?.event?.type !== job?.event?.type);
   send(connection.port, {
     type: "active-state", selectedElement, impact, deployment,
     tabId: connection.tabId,

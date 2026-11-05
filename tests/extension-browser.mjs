@@ -41,6 +41,8 @@ async function until(check, message) {
 try {
   const worker = context.serviceWorkers()[0] || await context.waitForEvent("serviceworker");
   const id = new URL(worker.url()).host;
+  console.log("Loaded extension worker:", worker.url());
+  await until(() => worker.evaluate(() => Boolean(globalThis.chrome?.storage?.local)), "Extension storage API did not initialize");
   await worker.evaluate(async baseUrl => {
     await chrome.storage.local.set({
       "frameweave.settings.v1": { provider: "custom", baseUrls: { custom: baseUrl }, models: { custom: "fixture-model" } },
