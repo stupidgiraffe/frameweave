@@ -364,7 +364,7 @@ async function sendActiveState(connection, requestedId) {
     ]);
     job = tab ? await jobs.get(tab.id) : null;
     // Retry if completion changed deployment while the snapshot was being read.
-  } while (before?.busy !== job?.busy || before?.event?.type !== job?.event?.type);
+  } while (before?.busy !== job?.busy || before?.event?.type !== job?.event?.type || (!job?.busy && before?.updatedAt !== job?.updatedAt));
   send(connection.port, {
     type: "active-state", selectedElement, impact, deployment,
     tabId: connection.tabId,

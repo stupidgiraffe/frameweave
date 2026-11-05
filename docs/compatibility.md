@@ -43,7 +43,7 @@ Run in a fresh Chrome profile after loading the unpacked extension.
 1. Confirm the manifest loads without errors and **Allow User Scripts** is enabled.
 2. Open a normal HTTPS page. Save an OpenAI, Anthropic, and DeepSeek test key independently; generate one layout preview for each provider.
    Also test **Custom OpenAI-compatible (Chat Completions)** with your provider's API base URL and model ID: save, reopen, preview, and generate a userscript draft. Confirm switching back to a preset restores its saved URL/model/key status. For local servers, test an HTTP loopback URL without a key if authentication is disabled.
-   For OpenRouter and AIHubMix, confirm the preset URL fills automatically, pasting a key loads searchable current models, selecting a model enables Save, and clearing the model disables Save/generation. Reopen to confirm saved-key discovery. Try a bad key, Refresh models, a URL override, and rapid provider switching; verify clear failures and no stale model list or credential requests while typing a URL. Enter a manual model ID when discovery is unavailable. Backend saves must still work with an empty hidden BYOK model.
+   For OpenRouter and AIHubMix, confirm the preset URL fills automatically, pasting a key loads searchable current models, selecting a model enables Save, and clearing the model disables Save/generation. Reopen to confirm the saved model stays collapsed and no catalog request starts until Change model. Try a bad key, Refresh models, a URL override, and rapid provider switching; verify clear failures and no stale model list or credential requests while typing a URL. Enter a manual model ID when discovery is unavailable. Backend saves must still work with an empty hidden BYOK model.
 3. Confirm Preview, Keep, Discard, and Remove correctly affect CSS and that **Save current CSS as userscript** produces a registered script.
 4. Create a `USER_SCRIPT` script using GM values, a `MAIN` script using page globals, and a `@grant none` script. Verify each runs at its selected run-at value.
 5. Import a `.user.js` with `@match`, `@include`, exclusions, `@require`, and `@resource`; save and reload the target page.
@@ -60,3 +60,9 @@ Run in a fresh Chrome profile after loading the unpacked extension.
 - A `MAIN` world script does not receive the native GM message bridge; use `USER_SCRIPT` for GM APIs.
 - Dynamic registrations may be cleared by browser/extension lifecycle events; Frameweave reconciles them on install and startup.
 - Remote script sources are powerful by design. Users should treat imported scripts, dependencies, and update URLs as code they are choosing to execute.
+
+### Mobile layout and background jobs
+
+Select a Target web page when the browser opens Frameweave as its own tab. Inspect reports the mapped node count beside the action buttons. Pick element switches to that target; tap an element or Cancel selection, then return to Frameweave. Test preview, keep/discard, CSS removal and save-as-userscript at phone width.
+
+Close Frameweave during generation, reopen and confirm progress without a duplicate request. Navigate the target while generation runs: the new document stays untouched and the plan remains available for explicit application after returning to its original URL. Browser/OS termination can still interrupt generation; the next open must report interruption rather than stay busy forever.

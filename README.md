@@ -86,7 +86,7 @@ Use dedicated, revocable API keys with spend limits. `chrome.storage.local` is b
 
 ### Use your own model provider
 
-In the popup, select **Direct BYOK**, choose a provider, and paste its API key. Frameweave fills the API URL and loads the provider's current model list. Type a keyword in **Search models** to filter immediately. Tap a wrapped model row to choose it; **Selected model ID** also accepts an exact manual ID. Search never changes the selected ID. Choose **Save settings** after selecting a model. An empty model blocks saving and generation; new installations have no preselected model. These settings apply to both layout generation and AI userscript drafting.
+In the popup, select **Direct BYOK**, choose a provider, and paste its API key. Frameweave fills the API URL and loads the provider's current model list. Type a keyword in **Search models** to filter immediately. The saved model stays collapsed on reopen; choose **Change model** to open the list. Tap a wrapped model row to choose it. **Enter an exact model ID manually** is available for unlisted models. Search never changes the selected ID. Choose **Save settings** after selecting a model. An empty model blocks saving and generation; new installations have no preselected model. These settings apply to both layout generation and AI userscript drafting.
 
 | Preset | Default API base URL |
 | --- | --- |
