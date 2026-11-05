@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.6
+
+- Keep the selected model compact, with an explicit Change model chooser and a separate manual-ID option.
+- Add explicit web-tab targeting and visible action feedback for mobile extension views. Repair picker highlights and add touch cancellation.
+- Keep background generation running after popup close, restore progress/results, prevent duplicate jobs and support cancellation.
+- Pin deployment to document IDs; retain generated plans across target navigation for explicit application.
+- Exercise actual loaded-extension page actions, detached generation, reconnect and navigation in Chromium CI.
+
 ## 1.0.5
 
 - Accept versioned endpoint paths in model catalogs. OpenRouter chat models appear in the picker and batch-only entries stay excluded.

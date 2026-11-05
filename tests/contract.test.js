@@ -186,7 +186,7 @@ test("preview defers automation until explicit commit and can be discarded", { c
         calls.push({ kind: "removeCSS", details });
       },
       async executeScript(details) {
-        calls.push({ kind: "executeScript", functionName: details.func.name });
+        calls.push({ kind: "executeScript", functionName: details.func.name, details });
         if (details.func.name === "cleanupAutomationRuntime") {
           return [{ result: { cleaned: 0 } }];
         }
@@ -200,7 +200,7 @@ test("preview defers automation until explicit commit and can be discarded", { c
       css: "main { max-width: 72rem; }",
       javascript: JSON.stringify(validProgram)
     };
-    const preview = await previewLayoutPayload(41, payload, { allFrames: false });
+    const preview = await previewLayoutPayload(41, payload, { allFrames: false, documentIds: ["original-document"] });
     assert.equal(preview.cssInjected, true);
     assert.equal(
       calls.filter((call) => call.functionName === "executeAutomationProgram").length,
@@ -222,12 +222,14 @@ test("preview defers automation until explicit commit and can be discarded", { c
     );
     assert.equal((await getDeploymentState(41)).mode, "applied");
 
-    await previewLayoutPayload(41, payload, { allFrames: false });
+    await previewLayoutPayload(41, payload, { allFrames: false, documentIds: ["original-document"] });
     const discarded = await discardPreview(41);
     assert.equal(discarded.discarded, true);
     assert.equal(discarded.removedCss, true);
     assert.equal(await getDeploymentState(41), null);
     assert.equal(calls.filter((call) => call.kind === "removeCSS").length, 2);
+    assert.ok(calls.length > 0);
+    for (const call of calls) assert.deepEqual(call.details.target, { tabId: 41, documentIds: ["original-document"] });
   } finally {
     if (originalChrome === undefined) {
       delete globalThis.chrome;

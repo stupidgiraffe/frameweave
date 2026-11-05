@@ -354,10 +354,7 @@ async function removeStoredCss(tabId, existingRecord) {
   if (typeof record.css === "string" && record.css) {
     try {
       await chrome.scripting.removeCSS({
-        target: {
-          tabId,
-          allFrames: Boolean(record.allFrames)
-        },
+        target: targetFor(tabId, record.allFrames, record.documentIds),
         css: record.css,
         origin: "USER"
       });
@@ -716,13 +713,10 @@ export async function executeAutomationProgram(program) {
   return summary;
 }
 
-async function cleanupTabAutomation(tabId, allFrames) {
+async function cleanupTabAutomation(tabId, allFrames, documentIds) {
   try {
     const results = await chrome.scripting.executeScript({
-      target: {
-        tabId,
-        allFrames: Boolean(allFrames)
-      },
+      target: targetFor(tabId, allFrames, documentIds),
       func: cleanupAutomationRuntime,
       world: "ISOLATED",
       injectImmediately: true
@@ -756,16 +750,13 @@ function aggregateAutomationResults(results) {
   );
 }
 
-async function runAutomationInTab(tabId, allFrames, program) {
+async function runAutomationInTab(tabId, allFrames, program, documentIds) {
   if (!program || !Array.isArray(program.steps) || program.steps.length === 0) {
     return emptyAutomationSummary();
   }
 
   const results = await chrome.scripting.executeScript({
-    target: {
-      tabId,
-      allFrames: Boolean(allFrames)
-    },
+    target: targetFor(tabId, allFrames, documentIds),
     func: executeAutomationProgram,
     args: [program],
     world: "ISOLATED",
@@ -774,19 +765,21 @@ async function runAutomationInTab(tabId, allFrames, program) {
   return aggregateAutomationResults(results);
 }
 
-function targetFor(tabId, allFrames) {
+function targetFor(tabId, allFrames, documentIds) {
+  if (Array.isArray(documentIds) && documentIds.length) return { tabId, documentIds };
   return {
     tabId,
     allFrames: Boolean(allFrames)
   };
 }
 
-async function replaceExistingDeployment(tabId, allFrames) {
+async function replaceExistingDeployment(tabId, allFrames, documentIds) {
   const previousRecord = await getStoredInjection(tabId);
   await removeStoredCss(tabId, previousRecord);
   const cleanedHooks = await cleanupTabAutomation(
     tabId,
-    Boolean(allFrames) || Boolean(previousRecord && previousRecord.allFrames)
+    Boolean(allFrames) || Boolean(previousRecord && previousRecord.allFrames),
+    documentIds
   );
   return {
     previousRecord,
@@ -795,6 +788,7 @@ async function replaceExistingDeployment(tabId, allFrames) {
 }
 
 export async function deployLayoutPayload(tabId, payload, options) {
+  options?.signal?.throwIfAborted();
   if (!Number.isInteger(tabId)) {
     throw new InjectionError("invalid_tab", "An active browser tab is required.");
   }
@@ -805,11 +799,13 @@ export async function deployLayoutPayload(tabId, payload, options) {
   const css = validateCss(payload.css);
   const program = parseAutomationProgram(payload.javascript);
   const allFrames = Boolean(options && options.allFrames);
-  const { cleanedHooks } = await replaceExistingDeployment(tabId, allFrames);
-  const target = targetFor(tabId, allFrames);
+  const documentIds = options?.documentIds;
+  const { cleanedHooks } = await replaceExistingDeployment(tabId, allFrames, documentIds);
+  const target = targetFor(tabId, allFrames, documentIds);
 
   let insertedCss = false;
   try {
+    options?.signal?.throwIfAborted();
     if (css) {
       await chrome.scripting.insertCSS({
         target,
@@ -819,12 +815,15 @@ export async function deployLayoutPayload(tabId, payload, options) {
       insertedCss = true;
     }
 
-    const automation = await runAutomationInTab(tabId, allFrames, program);
+    options?.signal?.throwIfAborted();
+    const automation = await runAutomationInTab(tabId, allFrames, program, documentIds);
 
+    options?.signal?.throwIfAborted();
     await chrome.storage.session.set({
       [sessionKey(tabId)]: {
         css,
         allFrames,
+        ...(documentIds ? { documentIds } : {}),
         injectedAt: Date.now(),
         mode: "applied"
       }
@@ -847,7 +846,7 @@ export async function deployLayoutPayload(tabId, payload, options) {
         // Preserve the original injection error.
       }
     }
-    await cleanupTabAutomation(tabId, allFrames);
+    await cleanupTabAutomation(tabId, allFrames, documentIds);
     if (error instanceof InjectionError) {
       throw error;
     }
@@ -860,6 +859,7 @@ export async function deployLayoutPayload(tabId, payload, options) {
  * session storage. The caller can explicitly commit or discard the preview.
  */
 export async function previewLayoutPayload(tabId, payload, options) {
+  options?.signal?.throwIfAborted();
   if (!Number.isInteger(tabId)) {
     throw new InjectionError("invalid_tab", "An active browser tab is required.");
   }
@@ -870,11 +870,13 @@ export async function previewLayoutPayload(tabId, payload, options) {
   const css = validateCss(payload.css);
   const program = parseAutomationProgram(payload.javascript);
   const allFrames = Boolean(options && options.allFrames);
-  const { cleanedHooks } = await replaceExistingDeployment(tabId, allFrames);
-  const target = targetFor(tabId, allFrames);
+  const documentIds = options?.documentIds;
+  const { cleanedHooks } = await replaceExistingDeployment(tabId, allFrames, documentIds);
+  const target = targetFor(tabId, allFrames, documentIds);
   let insertedCss = false;
 
   try {
+    options?.signal?.throwIfAborted();
     if (css) {
       await chrome.scripting.insertCSS({
         target,
@@ -884,10 +886,12 @@ export async function previewLayoutPayload(tabId, payload, options) {
       insertedCss = true;
     }
 
+    options?.signal?.throwIfAborted();
     await chrome.storage.session.set({
       [sessionKey(tabId)]: {
         css,
         allFrames,
+        ...(documentIds ? { documentIds } : {}),
         injectedAt: Date.now(),
         mode: "preview",
         program
@@ -934,7 +938,7 @@ export async function commitPreview(tabId) {
     : { version: 1, steps: [] };
   let automation;
   try {
-    automation = await runAutomationInTab(tabId, Boolean(record.allFrames), program);
+    automation = await runAutomationInTab(tabId, Boolean(record.allFrames), program, record.documentIds);
   } catch (error) {
     throw new InjectionError(
       "preview_commit_failed",
@@ -946,6 +950,7 @@ export async function commitPreview(tabId) {
     [sessionKey(tabId)]: {
       css: typeof record.css === "string" ? record.css : "",
       allFrames: Boolean(record.allFrames),
+      ...(record.documentIds ? { documentIds: record.documentIds } : {}),
       injectedAt: record.injectedAt || Date.now(),
       committedAt: Date.now(),
       mode: "applied"
@@ -970,7 +975,7 @@ export async function discardPreview(tabId) {
   }
 
   const removedCss = await removeStoredCss(tabId, record);
-  const cleanedHooks = await cleanupTabAutomation(tabId, Boolean(record.allFrames));
+  const cleanedHooks = await cleanupTabAutomation(tabId, Boolean(record.allFrames), record.documentIds);
   return {
     discarded: true,
     removedCss,
@@ -1024,7 +1029,7 @@ export async function removeLastInjectedCss(tabId) {
 
   const record = await getStoredInjection(tabId);
   const removedCss = await removeStoredCss(tabId, record);
-  const cleanedHooks = await cleanupTabAutomation(tabId, Boolean(record && record.allFrames));
+  const cleanedHooks = await cleanupTabAutomation(tabId, Boolean(record && record.allFrames), record?.documentIds);
   return {
     removedCss,
     cleanedHooks

@@ -27,7 +27,7 @@ flowchart TD
 
 ## AI layout pipeline
 
-`src/background.js` owns the long-lived popup protocol and `routeGeneration()`. The route decision is intentionally isolated:
+`src/background.js` owns the popup protocol and `routeGeneration()`. `src/pageJobs.js` owns per-tab jobs independently of observer ports: disconnecting a popup does not abort generation. Job progress and pending plans use session storage, a task-scoped API heartbeat keeps the worker alive during the operation, and reconnect detects interrupted workers. Target web tabs are explicit; document IDs bind deployment to the extracted documents, while navigation before deployment retains the generated plan for manual application at the original URL. The route decision is intentionally isolated:
 
 - `byok` calls `generateLayoutPayload()` with a provider key from `chrome.storage.local`.
 - Each direct provider keeps its own API base URL, model ID, and key. The custom provider uses OpenAI-compatible Chat Completions for both layout and userscript generation. Endpoint normalization is shared with settings validation; the backend adapter retains its separate contract.

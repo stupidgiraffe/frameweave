@@ -9,14 +9,14 @@ Frameweave stores the following in `chrome.storage.local` in the current browser
 - userscript source, metadata, local values, execution order, update state, and cached `@require` / `@resource` assets;
 - aggregate local activity counters.
 
-The popup's element target and layout preview state use `chrome.storage.session` and are cleared with the browser session or tab lifecycle.
+Element targets, layout previews, background job progress, the last target-tab choice, and generated plans awaiting application use `chrome.storage.session`. Pending plans contain generated CSS/automation and structural selection metadata, without credentials or the prompt. Closing the popup does not clear an active job or pending plan; browser-session or tab closure clears them.
 
 ## Network behavior
 
 Frameweave contacts only destinations selected or encoded by the user:
 
 - the selected direct model provider, including a user-configured API base URL or local model server, when Direct BYOK is used;
-- that provider's model catalog after key entry, on reopening its saved settings, or when **Refresh models** is selected. Discovery sends the provider credential where required but no prompt or page map; model lists stay in popup memory. Editing a URL does not send credentials automatically, and discovery will not reuse a saved key for a different origin without re-entry;
+- that provider's model catalog after key entry, when **Change model** opens the chooser, or when **Refresh models** is selected. Discovery sends the provider credential where required but no prompt or page map; model lists stay in popup memory. Editing a URL does not send credentials automatically, and discovery will not reuse a saved key for a different origin without re-entry;
 - the configured HTTPS backend endpoint when backend mode is selected;
 - script URLs, `@require` URLs, `@resource` URLs, `@updateURL`/`@downloadURL` URLs, and destinations requested by a userscript through `GM_xmlhttpRequest`.
 

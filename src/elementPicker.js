@@ -228,8 +228,9 @@ export function installElementPicker() {
     style.id = styleId;
     style.textContent = [
       "#" + overlayId + "{position:fixed!important;inset:0!important;z-index:2147483645!important;pointer-events:none!important;}",
-      "#" + highlightId + "{position:fixed!important;z-index:2147483646!important;pointer-events:none!important;display:none!important;outline:2px solid #6d7cff!important;outline-offset:2px!important;background:rgba(109,124,255,.15)!important;border-radius:3px!important;}",
-      "#" + tooltipId + "{position:fixed!important;z-index:2147483647!important;pointer-events:none!important;display:none!important;max-width:340px!important;padding:9px 11px!important;border:1px solid rgba(175,190,255,.66)!important;border-radius:9px!important;background:#101a35!important;color:#eff4ff!important;box-shadow:0 12px 35px rgba(0,0,0,.34)!important;font:12px/1.4 ui-sans-serif,system-ui,sans-serif!important;}",
+      "#" + highlightId + "{position:fixed!important;z-index:2147483646!important;pointer-events:none!important;outline:2px solid #6d7cff!important;outline-offset:2px!important;background:rgba(109,124,255,.15)!important;border-radius:3px!important;}",
+      "#" + tooltipId + "{position:fixed!important;z-index:2147483647!important;pointer-events:none!important;max-width:min(340px,90vw)!important;padding:9px 11px!important;border:1px solid rgba(175,190,255,.66)!important;border-radius:9px!important;background:#101a35!important;color:#eff4ff!important;box-shadow:0 12px 35px rgba(0,0,0,.34)!important;font:12px/1.4 ui-sans-serif,system-ui,sans-serif!important;}",
+      "#" + overlayId + " button{position:fixed!important;top:8px!important;right:8px!important;pointer-events:auto!important;min-height:44px!important;padding:10px!important;background:#101a35!important;color:#eff4ff!important;border:2px solid #91a2ff!important;border-radius:8px!important;font:14px system-ui!important;}",
       "#" + tooltipId + " .frameweave-picker-selector{color:#91a2ff!important;font-family:ui-monospace,SFMono-Regular,Consolas,monospace!important;overflow-wrap:anywhere!important;}",
       "#" + tooltipId + " .frameweave-picker-hint{margin-top:4px!important;color:#b9c5e6!important;font-size:11px!important;}",
       "body.frameweave-picker-active,body.frameweave-picker-active *{cursor:crosshair!important;}"
@@ -238,10 +239,17 @@ export function installElementPicker() {
 
     overlay = document.createElement("div");
     overlay.id = overlayId;
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel selection";
+    cancel.addEventListener("click", () => { stop(); send({ type: "frameweave.picker.cancel" }); });
+    overlay.append(cancel);
     highlight = document.createElement("div");
     highlight.id = highlightId;
     tooltip = document.createElement("div");
     tooltip.id = tooltipId;
+    highlight.style.display = "none";
+    tooltip.style.display = "none";
     document.body.append(overlay, highlight, tooltip);
     document.body.classList.add("frameweave-picker-active");
   };

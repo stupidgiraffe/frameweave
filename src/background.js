@@ -1,3 +1,4 @@
+import { createPageJobs, selectPageTab } from "./pageJobs.js";
 import { AIClientError, generateLayoutPayload } from "./aiClient.js";
 import { extractDomMap } from "./domExtractor.js";
 import { startPickerInTab, stopPickerInTab } from "./elementPicker.js";
@@ -74,7 +75,7 @@ function send(port, message) {
 }
 
 function safeError(error) {
-  if (error instanceof AIClientError || error instanceof InjectionError) {
+  if (error instanceof AIClientError || error instanceof InjectionError || error?.code === "request_in_progress") {
     return {
       code: error.code,
       message: error.message
@@ -86,16 +87,40 @@ function safeError(error) {
   };
 }
 
-async function activeTabId() {
-  const tabs = await chrome.tabs.query({
-    active: true,
-    lastFocusedWindow: true
-  });
-  const tab = tabs[0];
-  if (!tab || !Number.isInteger(tab.id)) {
-    throw new Error("Open a web page in the active tab, then try again.");
+const connections = new Set();
+const jobs = createPageJobs({
+  storage: chrome.storage.session,
+  heartbeat: () => chrome.runtime.getPlatformInfo(),
+  emit(tabId, message) {
+    for (const connection of connections) {
+      if (connection.tabId === tabId) send(connection.port, { ...message, tabId });
+    }
   }
-  return tab.id;
+});
+
+async function pageTabs() {
+  return chrome.tabs.query({ lastFocusedWindow: true });
+}
+
+async function requirePage(tabId) {
+  const tab = selectPageTab(await pageTabs(), tabId);
+  if (!tab) throw new Error("Choose a target web page above the layout prompt. Browser settings and extension pages cannot be styled.");
+  return tab;
+}
+
+async function documentIdentity(tabId, allFrames = false) {
+  const documents = await chrome.scripting.executeScript({
+    target: { tabId, allFrames }, func: () => ({ url: location.href, timeOrigin: performance.timeOrigin }), world: "ISOLATED"
+  });
+  const main = documents.find(document => document.frameId === 0);
+  if (!main?.result || documents.some(document => !document.documentId)) {
+    throw new Error("The target page is not readable. Reload it and check Frameweave’s site access permission and browser scripting support.");
+  }
+  return { ...main.result, documentIds: documents.map(document => document.documentId).sort() };
+}
+
+function sameDocument(left, right) {
+  return left.url === right.url && JSON.stringify(left.documentIds) === JSON.stringify(right.documentIds);
 }
 
 function optionsFrom(settings, message) {
@@ -145,8 +170,8 @@ async function routeGeneration(settings, input) {
   }
 }
 
-async function inspectActivePage(port, message) {
-  const [settings, tabId] = await Promise.all([getPublicSettings(), activeTabId()]);
+async function inspectActivePage(port, message, tabId) {
+  const settings = await getPublicSettings();
   send(port, {
     type: "state",
     phase: "extracting",
@@ -164,9 +189,11 @@ async function inspectActivePage(port, message) {
   });
 }
 
-async function generateAndDeploy(port, message, abortController, mode) {
-  const [settings, tabId] = await Promise.all([getRuntimeSettings(), activeTabId()]);
+async function generateAndDeploy(port, message, signal, mode, tabId, report) {
+  const settings = await getRuntimeSettings();
   const extractionOptions = optionsFrom(settings, message);
+  const identity = await documentIdentity(tabId, extractionOptions.allFrames);
+  extractionOptions.documentIds = identity.documentIds;
 
   send(port, {
     type: "state",
@@ -189,7 +216,7 @@ async function generateAndDeploy(port, message, abortController, mode) {
     domMap,
     selectedElement,
     maxOutputTokens: settings.maxOutputTokens,
-    signal: abortController.signal,
+    signal,
     onProgress(progress) {
       if (progress.phase === "generating") {
         send(port, {
@@ -201,33 +228,42 @@ async function generateAndDeploy(port, message, abortController, mode) {
     }
   });
 
+  signal.throwIfAborted();
+  const pending = { payload, extractionOptions, summary, selectedElement, identity, mode };
+  let current = null;
+  try { current = await documentIdentity(tabId, extractionOptions.allFrames); } catch { /* Retain the result if the page is temporarily unavailable. */ }
+  if (!current || !sameDocument(identity, current)) {
+    await report({ type: "generation.ready", message: "Generation finished. The target page navigated, so the result was saved. Return to the original page and choose Apply saved result when ready." }, pending);
+    return;
+  }
+  try {
+    await deployGenerated(port, tabId, pending, signal);
+  } catch (error) {
+    signal.throwIfAborted();
+    let after = null;
+    try { after = await documentIdentity(tabId, extractionOptions.allFrames); } catch { /* Preserve the plan. */ }
+    if (!after || !sameDocument(identity, after)) {
+      await report({ type: "generation.ready", message: "The page changed during deployment. Your generated result is saved; return to the original page and apply it when ready." }, pending);
+    } else throw error;
+  }
+}
+
+async function deployGenerated(port, tabId, pending, signal) {
+  signal.throwIfAborted();
+  const { payload, summary, selectedElement, mode } = pending;
+  const extractionOptions = { ...pending.extractionOptions, signal };
   send(port, {
-    type: "state",
-    phase: "injecting",
-    message: mode === "preview"
-      ? "Injecting the CSS preview; automation will wait for confirmation..."
-      : "Applying CSS and validated interface automation..."
+    type: "state", phase: "injecting",
+    message: mode === "preview" ? "Applying the CSS preview…" : "Applying CSS and validated interface automation…"
   });
   const deployment = mode === "preview"
     ? await previewLayoutPayload(tabId, payload, extractionOptions)
     : await deployLayoutPayload(tabId, payload, extractionOptions);
-  const impact = await recordImpact({
-    preview: mode === "preview",
-    cssInjected: deployment.cssInjected,
-    automationApplied: deployment.automation.applied
-  });
-
-  send(port, {
-    type: mode === "preview" ? "preview.complete" : "apply.complete",
-    summary,
-    deployment,
-    impact,
-    selectedElement
-  });
+  const impact = await recordImpact({ preview: mode === "preview", cssInjected: deployment.cssInjected, automationApplied: deployment.automation.applied });
+  send(port, { type: mode === "preview" ? "preview.complete" : "apply.complete", summary, deployment, impact, selectedElement });
 }
 
-async function commitCurrentPreview(port) {
-  const tabId = await activeTabId();
+async function commitCurrentPreview(port, tabId) {
   send(port, {
     type: "state",
     phase: "injecting",
@@ -245,8 +281,7 @@ async function commitCurrentPreview(port) {
   });
 }
 
-async function discardCurrentPreview(port) {
-  const tabId = await activeTabId();
+async function discardCurrentPreview(port, tabId) {
   const result = await discardPreview(tabId);
   send(port, {
     type: "preview.discard.complete",
@@ -254,8 +289,7 @@ async function discardCurrentPreview(port) {
   });
 }
 
-async function removeCss(port) {
-  const tabId = await activeTabId();
+async function removeCss(port, tabId) {
   const result = await removeLastInjectedCss(tabId);
   send(port, {
     type: "remove.complete",
@@ -263,12 +297,8 @@ async function removeCss(port) {
   });
 }
 
-async function saveCurrentLayoutAsUserScript(port) {
-  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  const tab = tabs[0];
-  if (!tab || !Number.isInteger(tab.id) || typeof tab.url !== "string") {
-    throw new Error("Open a normal web page before saving a layout as a userscript.");
-  }
+async function saveCurrentLayoutAsUserScript(port, tabId) {
+  const tab = await requirePage(tabId);
   const url = new URL(tab.url);
   if (!/^https?:$/.test(url.protocol) || !url.hostname) {
     throw new Error("Layouts can be saved only from an HTTP or HTTPS page.");
@@ -300,17 +330,16 @@ async function saveCurrentLayoutAsUserScript(port) {
   });
 }
 
-async function startElementPicker(port) {
-  const tabId = await activeTabId();
+async function startElementPicker(port, tabId) {
   const result = await startPickerInTab(tabId);
+  await chrome.tabs.update(tabId, { active: true });
   send(port, {
     type: "picker.started",
     result
   });
 }
 
-async function clearElementTarget(port) {
-  const tabId = await activeTabId();
+async function clearElementTarget(port, tabId) {
   await Promise.all([
     clearPickedElement(tabId),
     stopPickerInTab(tabId).catch(() => ({ stopped: false }))
@@ -318,18 +347,29 @@ async function clearElementTarget(port) {
   send(port, { type: "picker.cleared" });
 }
 
-async function sendActiveState(port) {
-  const tabId = await activeTabId();
-  const [selectedElement, impact, deployment] = await Promise.all([
-    getPickedElement(tabId),
-    getImpactSummary(),
-    getDeploymentState(tabId)
-  ]);
-  send(port, {
-    type: "active-state",
-    selectedElement,
-    impact,
-    deployment
+async function sendActiveState(connection, requestedId) {
+  const tabs = await pageTabs();
+  const active = tabs.find(tab => tab.active);
+  const targetKey = "frameweave.target.v1." + (active?.windowId ?? "default");
+  const savedTarget = (await chrome.storage.session.get(targetKey))[targetKey];
+  const tab = selectPageTab(tabs, requestedId ?? connection.tabId)
+    || (requestedId == null && connection.tabId == null ? selectPageTab(tabs, savedTarget) : null);
+  if (tab) await chrome.storage.session.set({ [targetKey]: tab.id });
+  connection.tabId = tab?.id ?? null;
+  let selectedElement, impact, deployment, job, before;
+  do {
+    before = tab ? await jobs.get(tab.id) : null;
+    [selectedElement, impact, deployment] = await Promise.all([
+      tab ? getPickedElement(tab.id) : null, getImpactSummary(), tab ? getDeploymentState(tab.id) : null
+    ]);
+    job = tab ? await jobs.get(tab.id) : null;
+    // Retry if completion changed deployment while the snapshot was being read.
+  } while (before?.busy !== job?.busy || before?.event?.type !== job?.event?.type || (!job?.busy && before?.updatedAt !== job?.updatedAt));
+  send(connection.port, {
+    type: "active-state", selectedElement, impact, deployment,
+    tabId: connection.tabId,
+    pages: tabs.filter(tab => /^https?:\/\//.test(tab.url || "")).map(tab => ({ id: tab.id, title: tab.title || tab.url, url: tab.url })),
+    job: job ? { busy: job.busy, event: job.event, hasPending: Boolean(job.pending) } : null
   });
 }
 
@@ -363,12 +403,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === PICKER_SELECTION) {
     void savePickedElement(tabId, message.selection)
-      .then(() => sendResponse({ ok: true }))
+      .then((selectedElement) => {
+        for (const connection of connections) if (connection.tabId === tabId) send(connection.port, { type: "picker.selected", selectedElement });
+        sendResponse({ ok: true });
+      })
       .catch((error) => sendResponse({ ok: false, error: safeError(error) }));
     return true;
   }
 
   if (message.type === PICKER_CANCEL) {
+    for (const connection of connections) if (connection.tabId === tabId) send(connection.port, { type: "picker.cancelled" });
     sendResponse({ ok: true });
     return undefined;
   }
@@ -378,6 +422,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void Promise.all([
+    jobs.remove(tabId),
     clearPickedElement(tabId),
     clearUserScriptTabStateForTab(tabId)
   ]);
@@ -403,106 +448,55 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 });
 
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== POPUP_PORT) {
-    return;
-  }
-
-  let busy = false;
-  let abortController = null;
-
-  port.onDisconnect.addListener(() => {
-    if (abortController) {
-      abortController.abort();
-    }
-  });
+  if (port.name !== POPUP_PORT) return;
+  const connection = { port, tabId: null };
+  connections.add(connection);
+  port.onDisconnect.addListener(() => connections.delete(connection));
 
   port.onMessage.addListener((message) => {
     void (async () => {
-      if (!message || typeof message.type !== "string") {
-        return;
-      }
-
-      if (message.type === "ping") {
-        send(port, { type: "pong" });
-        return;
-      }
-      if (message.type === "get-active-state") {
-        try {
-          await sendActiveState(port);
-        } catch (error) {
-          send(port, { type: "error", error: safeError(error) });
+      if (!message || typeof message.type !== "string") return;
+      try {
+        if (message.type === "ping") { send(port, { type: "pong" }); return; }
+        if (message.type === "get-active-state") {
+          await sendActiveState(connection, message.tabId);
+          return;
         }
-        return;
-      }
-      if (busy) {
-        send(port, {
-          type: "error",
-          error: {
-            code: "request_in_progress",
-            message: "Wait for the current operation to finish."
+        if (message.type === "cancel-generation") {
+          const tabId = message.tabId ?? connection.tabId;
+          if (Number.isInteger(tabId)) jobs.cancel(tabId);
+          return;
+        }
+        const tab = await requirePage(message.tabId ?? connection.tabId);
+        connection.tabId = tab.id;
+        const previous = message.type === "apply-saved-result" ? await jobs.get(tab.id) : null;
+        await jobs.run(tab.id, async ({ report, signal }) => {
+          const sink = { postMessage: event => { void report(event, ["apply.complete", "preview.complete"].includes(event.type) ? null : undefined).catch(() => {}); } };
+          switch (message.type) {
+            case "inspect": await inspectActivePage(sink, message, tab.id); break;
+            case "preview":
+            case "apply": await generateAndDeploy(sink, message, signal, message.type, tab.id, report); break;
+            case "apply-saved-result": {
+              if (!previous?.pending) throw new Error("There is no saved result for this page.");
+              const current = await documentIdentity(tab.id, previous.pending.extractionOptions.allFrames);
+              if (current.url !== previous.pending.identity.url) {
+                await report({ type: "generation.ready", message: "Return this target tab to the original page before applying its saved result." }, previous.pending);
+                break;
+              }
+              await deployGenerated(sink, tab.id, { ...previous.pending, extractionOptions: { ...previous.pending.extractionOptions, documentIds: current.documentIds } }, signal);
+              break;
+            }
+            case "commit-preview": await commitCurrentPreview(sink, tab.id); break;
+            case "discard-preview": await discardCurrentPreview(sink, tab.id); break;
+            case "remove-css": await removeCss(sink, tab.id); break;
+            case "save-layout-as-script": await saveCurrentLayoutAsUserScript(sink, tab.id); break;
+            case "pick-element": await startElementPicker(sink, tab.id); break;
+            case "clear-picked-element": await clearElementTarget(sink, tab.id); break;
+            default: throw new Error("The extension received an unsupported request.");
           }
         });
-        return;
-      }
-
-      try {
-        switch (message.type) {
-          case "inspect":
-            busy = true;
-            await inspectActivePage(port, message);
-            break;
-          case "preview":
-            busy = true;
-            abortController = new AbortController();
-            await generateAndDeploy(port, message, abortController, "preview");
-            break;
-          case "apply":
-            busy = true;
-            abortController = new AbortController();
-            await generateAndDeploy(port, message, abortController, "apply");
-            break;
-          case "commit-preview":
-            busy = true;
-            await commitCurrentPreview(port);
-            break;
-          case "discard-preview":
-            busy = true;
-            await discardCurrentPreview(port);
-            break;
-          case "remove-css":
-            busy = true;
-            await removeCss(port);
-            break;
-          case "save-layout-as-script":
-            busy = true;
-            await saveCurrentLayoutAsUserScript(port);
-            break;
-          case "pick-element":
-            busy = true;
-            await startElementPicker(port);
-            break;
-          case "clear-picked-element":
-            busy = true;
-            await clearElementTarget(port);
-            break;
-          default:
-            send(port, {
-              type: "error",
-              error: {
-                code: "unknown_message",
-                message: "The extension received an unsupported request."
-              }
-            });
-            return;
-        }
       } catch (error) {
-        send(port, {
-          type: "error",
-          error: safeError(error)
-        });
-      } finally {
-        busy = false;
-        abortController = null;
+        send(port, { type: "error", error: safeError(error) });
       }
     })();
   });

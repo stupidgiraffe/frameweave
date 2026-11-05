@@ -32,7 +32,7 @@ button {
 }
 
 button:disabled {
-  cursor: wait;
+  cursor: default;
   opacity: 0.58;
 }
 
@@ -491,3 +491,19 @@ summary {
 .model-choice[aria-pressed="true"] { background: #293865; }
 .model-choice:focus-visible { outline: 2px solid #8090ff; outline-offset: -2px; }
 .model-choice:last-child { border-bottom: 0; }
+
+.model-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.model-summary > div { min-width: 0; }
+.selected-model-label { display: block; margin-top: 5px; font-size: 13px; overflow-wrap: anywhere; }
+.model-chooser { display: grid; gap: 8px; min-width: 0; }
+#manual-model { display: grid; gap: 8px; }
+#manual-model input, #manual-model label, #manual-model button { margin-top: 8px; }
+.status { display: block; overflow-wrap: anywhere; }
+button:focus-visible, summary:focus-visible { outline: 2px solid #8090ff; outline-offset: 2px; }
+@media (max-width: 480px) {
+  input, select, textarea { font-size: 16px; }
+  .primary-button, .secondary-button, .quiet-button, .text-button, summary { min-height: 44px; }
+  .run-actions { grid-template-columns: 1fr 1fr; }
+  #apply-layout { grid-column: 1 / -1; }
+  .preview-actions { flex-wrap: wrap; }
+}
