@@ -73,6 +73,9 @@ try {
   await page.locator("#clear-provider-key").click();
   await page.waitForFunction(() => document.querySelector("#status").textContent === "Saved provider key removed.");
   assert.equal(page.isClosed(), false);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await page.locator("#byok-settings").screenshot({ path: "model-picker-desktop.png" });
   assert.deepEqual(errors, []);
   console.log("Chromium mobile viewport: live search, late response, selection, reset, wrapping, and key clearing passed.");
 } finally {

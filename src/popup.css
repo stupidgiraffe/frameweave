@@ -502,7 +502,7 @@ summary {
 button:focus-visible, summary:focus-visible { outline: 2px solid #8090ff; outline-offset: 2px; }
 @media (max-width: 480px) {
   input, select, textarea { font-size: 16px; }
-  button, .text-button, summary { min-height: 44px; }
+  .primary-button, .secondary-button, .quiet-button, .text-button, summary { min-height: 44px; }
   .run-actions { grid-template-columns: 1fr 1fr; }
   #apply-layout { grid-column: 1 / -1; }
   .preview-actions { flex-wrap: wrap; }
