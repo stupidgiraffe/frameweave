@@ -53,6 +53,7 @@ export function createPageJobs({ storage, emit = () => {}, heartbeat = () => {} 
       controller.signal.throwIfAborted();
       await execute({ report, signal: controller.signal });
     } catch (error) {
+      if (controller.signal.aborted) error = controller.signal.reason;
       await report({ type: "error", error: { code: error.code || "operation_failed", message: String(error.message || error).slice(0, 700) } });
     } finally {
       clearInterval(interval);

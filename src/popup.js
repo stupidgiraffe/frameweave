@@ -758,7 +758,7 @@ function handleMessage(message, restoring = false) {
   }
 }
 
-port.onMessage.addListener(handleMessage);
+port.onMessage.addListener(message => handleMessage(message));
 
 port.onDisconnect.addListener(() => {
   if (busy) {

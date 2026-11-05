@@ -49,6 +49,7 @@ try {
       "frameweave.secrets.v1": { providerKeys: { custom: "fixture-key" } }
     });
   }, origin + "/v1");
+  console.log("Extension storage ready");
   const target = await context.newPage();
   await target.goto(origin + "/fixture");
   const targetId = await worker.evaluate(async url => (await chrome.tabs.query({})).find(tab => tab.url === url).id, origin + "/fixture");
@@ -60,6 +61,7 @@ try {
     return page;
   }
   let ui = await popup();
+  console.log("Mobile target resolved");
   assert.equal(await ui.locator("#model-chooser").isVisible(), false);
   assert.equal(await ui.locator("#selected-model-label").textContent(), "fixture-model");
   await ui.locator("#inspect-page").click();
@@ -86,6 +88,8 @@ try {
   assert.equal(await target.locator("#frameweave-picker-overlay").count(), 0);
   await ui.bringToFront();
   await ui.locator("#layout-prompt").fill("Make the main column narrower");
+
+  console.log("Inspect and touch selection/cancel passed");
 
   // Actual background fetch and injection after the extension UI is destroyed.
   hold = true;
@@ -119,6 +123,8 @@ try {
   await ui.waitForFunction(() => document.querySelector("#status").textContent.startsWith("Saved “Frameweave layout"));
   await worker.evaluate(async () => { await chrome.storage.local.remove("frameweave.userscripts.v1"); });
 
+  console.log("Detached generation, preview, commit/discard, remove and save passed");
+
   // Navigate the SAME tab before the result arrives. New document must remain untouched.
   hold = true;
   await ui.locator("#apply-layout").click();
@@ -148,10 +154,25 @@ try {
   ui = await popup();
   assert.equal(await ui.locator("#save-layout-as-script").isEnabled(), false, "Replayed completion must not restore CSS that navigation removed");
   assert.equal(await ui.locator("#preview-actions").isVisible(), false);
+  hold = true;
+  await ui.locator("#layout-prompt").fill("Make the main column narrower");
+  await ui.locator("#apply-layout").click();
+  await until(() => waiting.length === 1, "Cancellation request did not start");
+  await ui.locator("#cancel-generation").click();
+  await ui.waitForFunction(() => /cancel/i.test(document.querySelector("#status").textContent));
+  release();
+  assert.equal(await target.locator("main").evaluate(element => getComputedStyle(element).maxWidth), "none");
   assert.ok(await ui.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await ui.locator(".prompt-section").screenshot({ path: "page-actions-phone-width.png" });
   assert.ok(requests >= 4);
   console.log("Loaded MV3 extension: mobile inspect, touch picker/cancel, preview/commit/discard, CSS removal/save, detached generation, reconnect, navigation retention and explicit application passed.");
+} catch (error) {
+  for (const page of context.pages()) {
+    if (!page.url().endsWith("/popup.html")) continue;
+    console.error("Extension UI state:", await page.evaluate(() => ({ status: document.querySelector("#status")?.textContent, tab: document.querySelector("#page-tab")?.value, applyDisabled: document.querySelector("#apply-layout")?.disabled, target: document.querySelector("#selected-target")?.textContent })));
+    await page.screenshot({ path: "page-actions-phone-width.png", fullPage: true });
+  }
+  throw error;
 } finally {
   release();
   await context.close();
